@@ -9,7 +9,7 @@ classes = map(x -> convert(Integer, x), classes)
 
 
 gamma = 0
-lambda = 0.5
+lambda = 0.8
 
 #############################
 
@@ -46,10 +46,11 @@ else
 			nk[i] = length(class_k)
 			mu_k[:,i] = vec(mean(x_mat[class_k,:],1))
 			xc_mat = Array(Float64,nk[i],p)
-			for j in 1:nk
+			for j in 1:nk[i]
+				@assert size(xc_mat) == (nk[i],p)
 				xc_mat[j,:] = x_mat[class_k[j],:] - mu_k[:,i]'	
 			end
-			sigma_k[:,:,i] = ((1-lambda)*(xc_mat' * xc_mat) + lambda * sigma)/((1-lambda)*nk + lambda*n)
+			sigma_k[:,:,i] = ((1-lambda)*(xc_mat' * xc_mat) + lambda * sigma)/((1-lambda)*nk[i] + lambda*n)
 		end
 	end
 end
