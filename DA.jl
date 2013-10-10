@@ -2,10 +2,11 @@ using DataFrames
 
 data = readcsv("iris.csv")
 
-x_mat = data[:,1:4]
+x = data[:,1:4]
 
-classes =  data[:,5] # map(x -> convert(Integer x), data[:,5])
-classes = map(x -> convert(Integer, x), classes)
+y = map(x -> convert(Integer, x), data[:,5])
+
+w = ones(150)
 
 
 gamma = 0
@@ -13,44 +14,52 @@ lambda = 0.8
 
 #############################
 
-classlist = unique(classes)
+# Input:
+#   x: n by p matrix of predictors (one column per predictor)
+#   y: n by 1 response vector of classes
+#   w: n by 1 vector of observation weights (default weight is 1)
+#   gamma: regularization parameter (shrink towards identity matrix)
+#   lambda: regularization parameter (shrink QDA towards LDA)
+#   priors: class prior weights
+
+classlist = unique(y)
 k = length(classlist)
 n,p = size(x_mat)
 
 mu_k = Array(Float64, p, k)
 priors = Array(Float64, k)
 
-sigma = Array(Float64, p, p)
-sigma = cov(x_mat)
-
-
-
 if lambda == 1 # LDA
-	#mu_k[:,i] = vec(mean(x_mat[class_k,:], 1))
-
+	println("Branch: LDA")
+	sigma = Array(Float64, p, p)
+	sigma = cov(x)
+	for i in 1:k
+		class_k = find(y .== i)
+		mu_k[:,i] = vec(mean(x[class_k,:], 1))
+	end
 else
 	sigma_k = Array(Float64, p, p, k)
 	if lambda == 0 # QDA
+		println("Branch: QDA")
 		#class_indices = find(classes .== i)
-		#priors[i] = length(class_indices) / n
 		#mu_k[:,i] = vec(mean(predictor[class_indices,:], 1))
 		#sigma_k[:,:,i] = cov(predictor[class_indices,:])
 	else # RDA
+		println("Branch: RDA")
 		mu = Array(Float64,p)
-		mu = vec(mean(x_mat,1))
+		mu = vec(mean(x,1))		# Pooled mean vector for covariance estimation
 		sigma = Array(Float64,p,p)
-		sigma = cov(x_mat)
-		nk = Array(Int64, k)
+		sigma = cov(x)			# Pooled covariance matrix - is the coefficient correct?
+		nk = Array(Int64, k)		# Class counts
 		for i in 1:k
-			class_k = find(classes .== i)
+			class_k = find(classes .== i)	# Indices for class k
 			nk[i] = length(class_k)
-			mu_k[:,i] = vec(mean(x_mat[class_k,:],1))
-			xc_mat = Array(Float64,nk[i],p)
+			mu_k[:,i] = vec(mean(x[class_k,:],1))
+			xc = Array(Float64,nk[i],p)
 			for j in 1:nk[i]
-				@assert size(xc_mat) == (nk[i],p)
-				xc_mat[j,:] = x_mat[class_k[j],:] - mu_k[:,i]'	
+				xc[j,:] = x[class_k[j],:] - mu_k[:,i]'	# Center the x matrix (mean has been computed)
 			end
-			sigma_k[:,:,i] = ((1-lambda)*(xc_mat' * xc_mat) + lambda * sigma)/((1-lambda)*nk[i] + lambda*n)
+			sigma_k[:,:,i] = ((1-lambda)*(xc' * xc) + lambda * sigma)/((1-lambda)*nk[i] + lambda*n)
 		end
 	end
 end
