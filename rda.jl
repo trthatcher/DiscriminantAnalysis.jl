@@ -2,7 +2,6 @@ type RdaResp
 	y::Vector
 	ylab::Vector
 	wts::Vector	# prior weights
-	
 end
 
 type RdaMod
@@ -29,7 +28,7 @@ end
 
 
 function fitqda()
-
+	5
 end
 
 # Input:
@@ -47,10 +46,8 @@ function fitrda()
 
 	mu_k = Array(Float64, p, k)
 
-	mu = Array(Float64,p)
-	mu = vec(mean(x,1))		# Pooled mean vector for covariance estimation
-	sigma = Array(Float64,p,p)
-	sigma = cov(x)			# Pooled covariance matrix - is the coefficient correct?
+	mu = Array(Float64,p); mu = vec(mean(x,1))	# Pooled mean vector for covariance estimation
+	sigma = Array(Float64,p,p); sigma = cov(x)	# Pooled covariance matrix - is the coefficient correct?
 	nk = Array(Int64, k)		# Class counts
 	for i in 1:k
 		class_k = find(classes .== i)	# Indices for class k
@@ -72,10 +69,11 @@ function rda(f::Formula, df::AbstractDataFrame, lambda::Real, gamma::Real)
 	ModelMatrix(mf)
 end
 
-function lda(f, df) = rda(f, df, 1, 0)
-function rlda(f, df, gamma) = rda(f, df, 1, gamma)
-function qda(f, df) = rda(f, df, 0, 0)
-function rqda(f, df, gamma) = rda(f, df, 0, gamma)
+# Multiple Dispatch and alternatives
+lda(f, df) = rda(f, df, 1, 0)
+rlda(f, df, gamma) = rda(f, df, 1, gamma)
+qda(f, df) = rda(f, df, 0, 0)
+rqda(f, df, gamma) = rda(f, df, 0, gamma)
 
 
 
