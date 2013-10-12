@@ -21,8 +21,8 @@ module DA
 
 	abstract DisAnalysis
 
-	include("rda.jl")
-	include("kfd.jl")
+	include("rdafit.jl")
+	include("kfdfit.jl")
 
 end # module
 
