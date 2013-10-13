@@ -1,29 +1,41 @@
-type RdaResp
-	y::Vector
-	ylab::Vector
-	wts::Vector	# prior weights
+type DaResp{T<:FP} <: ModResp
+	y::PooledDataArray	# Response vector
+	wts::Vector{T}	# Observation weights
+	priors::Vector	# Prior weights
 end
 
-type RdaMod
+type RdaMod <: DisAnalysisModel
 	fr::ModelFrame
-	rr::RdaResp
-	dd::DisAnalysis	# Uses discriminant functions
+	rr::DaResp
+	mm::Array	# Pooled mean
+	mk::Array	# Class means
+	ss::Array	# Pooled sigma
+	sk::Array	# Class sigmas
 	ff::Formula
 end
 
+type LdaMod <: DisAnalysisModel
+	fr::ModelFrame
+	rr::DaResp
+	mm::Array	# Pooled mean
+	mk::Array	# Class means
+	ss::Array	# Pooled sigma
+	ff::Formula
+end
+
+
+
 function fitlda()
 	classlist = unique(y)
-	k = length(classlist)
-	n,p = size(x_mat)
+	k = length(classlist); n,p = size(x_mat)
 
-	mu_k = Array(Float64, p, k)
-
-	sigma = Array(Float64, p, p)
+	mu_k = Array(Float64, p, k); sigma = Array(Float64, p, p)
 	sigma = cov(x)
 	for i in 1:k
 		class_k = find(y .== i)
 		mu_k[:,i] = vec(mean(x[class_k,:], 1))
 	end
+	
 end
 
 
@@ -63,17 +75,52 @@ end
 
 
 
-function rda(f::Formula, df::AbstractDataFrame, lambda::Real, gamma::Real)
+
+
+function rda{T<:FP}(f::Formula, df::AbstractDataFrame; lambda::Real=0.5, gamma::Real=0, priors::Vector{T}=FP[], wts::Vector{T}=FP[])
 	mf = ModelFrame(f, df)
-	# mm = 
-	ModelMatrix(mf)
+	mm = ModelMatrix(mf)
+	y = PooledDataArray(model_response) 	# NOTE: pooled conversion done INSIDE rda in case df is spliced (and leaves out factor levels)
+		n = length(y); k = length(levels(y)); lw = length(wts); lp = length(priors)
+		lw == 0 || lw == n || error("length(wts) = $lw should be 0 or $n") 
+	w = lw == 0 ? FP[] : copy(wts)/sum(wts)
+		lp == 0 || lp == k || error("length(priors) = $lp should be 0 or $k")
+	p = priors == k ? copy(priors) : ones(FP, k)/k
+	rr = RdaResp(y, w, p)
+
 end
 
 # Multiple Dispatch and alternatives
 lda(f, df) = rda(f, df, 1, 0)
-rlda(f, df, gamma) = rda(f, df, 1, gamma)
+lda(f, df, gamma) = rda(f, df, 1, gamma)
 qda(f, df) = rda(f, df, 0, 0)
-rqda(f, df, gamma) = rda(f, df, 0, gamma)
+qda(f, df, gamma) = rda(f, df, 0, gamma)
+
+#function rda{T <: FP}(f::Formula, df::AbstractDataFrame; lambda::Real = 0.0, gamma::Real = 0.0, priors::Union(Vector{T},Dict)=FP[], wts=FP[])
+#	mf = ModelFrame(f, df)
+#	mm = ModelMatrix(mf)
+#		#mf.terms.response || error("Model formula one-sided")
+#		#y = mf.df[:,1]
+#		#isa(y, PooledDataArray) || error("Response vector is not a PooledDataArray")
+#	y = PooledDataArray(model_response) # ISSUE: levels(iris[1:100,:]["Species"]) returns three levels when there's two
+#	n = length(y); k = length(levels(y)); lw = length(wts)
+#	if isa(priors, Dict)
+#		# Check if the collection is complete
+#		d = priors
+#	else
+#		lw = length(wts)
+#		if lw == 0 
+#			
+#		#d = isa(priors, Vector{T}) ? Priors(levels(y), priors) : priors
+#	end
+#	rr = RdaResp(y, wts, d)
+#end
 
 
+# Create dictionary for priors
+#function Priors{T<:FP}(class::Vector, weight::Vector{T})
+#	n = length(class)
+#	n == length(weight) || error("Class and prior mismatch")
+#	{class[i] => weight[i] for i = 1:n}
+#end
 

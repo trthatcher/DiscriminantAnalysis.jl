@@ -12,14 +12,16 @@ module DA
 
 				# functions
 		rda,	# Regularized Discriminant Analysis (qda to lda shrinkage)
-		lda,	# Linear Discriminant Analysis
-		rlda,	# Regularized Linear Discriminant Analysis (ridge analogue)
-		qda,	# Quadratic Discriminant Analysis
-		rqda	# Regularized Quadratic Discriminant Analysis (ridge analogue)
+		lda,	# Linear Discriminant Analysis (with ridge analogue)
+		qda	# Quadratic Discriminant Analysis (with ridge analogue)
+
+	typealias FP FloatingPoint
 
 	abstract ModResp
 
 	abstract DisAnalysis
+
+	abstract DisAnalysisModel
 
 	include("rdafit.jl")
 	include("kfdfit.jl")
