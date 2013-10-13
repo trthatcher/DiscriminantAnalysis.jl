@@ -1,65 +1,67 @@
 type DaResp{T<:FP} <: ModResp
 	y::PooledDataArray	# Response vector
-	wts::Vector{T}	# Observation weights
-	priors::Vector	# Prior weights
-end
-
-type RdaMod <: DisAnalysisModel
-	fr::ModelFrame
-	rr::DaResp
-	mm::Array	# Pooled mean
-	mk::Array	# Class means
-	ss::Array	# Pooled sigma
-	sk::Array	# Class sigmas
-	ff::Formula
-end
-
-type LdaMod <: DisAnalysisModel
-	fr::ModelFrame
-	rr::DaResp
-	mm::Array	# Pooled mean
-	mk::Array	# Class means
-	ss::Array	# Pooled sigma
-	ff::Formula
-end
-
-
-
-function fitlda()
-	classlist = unique(y)
-	k = length(classlist); n,p = size(x_mat)
-
-	mu_k = Array(Float64, p, k); sigma = Array(Float64, p, p)
-	sigma = cov(x)
-	for i in 1:k
-		class_k = find(y .== i)
-		mu_k[:,i] = vec(mean(x[class_k,:], 1))
+	wts::Vector{T}		# Observation weights
+	priors::Vector{T}	# Prior weights
+	function DaResp(y::PooledDataArray, wts::Vector{T}, priors::Vector{T})
+		lw = length(wts)
+		lw == 0 || lw == length(y) || error("Length mismatch")
+		length(priors) == length(levels(y)) || error("Length mismatch")
+		new(y, wts, priors)
 	end
-	
 end
 
-
-function fitqda()
-	5
+type RDisAnalysis <: DisAnal
+	mu::Vector
+	muk::Array
+	sigma::Array
+	sigmak::Array
+	logpr::Vector
 end
 
-# Input:
-#   x: n by p matrix of predictors (one column per predictor)
-#   y: n by 1 response vector of classes
-#   w: n by 1 vector of observation weights (default weight is 1)
-#   gamma: regularization parameter (shrink towards identity matrix)
-#   lambda: regularization parameter (shrink QDA towards LDA)
-#   priors: class prior weights
+type LDisAnalyis <: DisAnal
+	mu::Vector
+	muk::Array
+	sigma::Array
+	logpr::Vector
+end
 
-function fitrda()
-	classlist = unique(y)
-	k = length(classlist)
-	n,p = size(x_mat)
+type RdaMod <: DisAnalModel
+	fr::ModelFrame
+	rr::DaResp
+	da::RDisAnalyis
+	ff::Formula
+end
 
-	mu_k = Array(Float64, p, k)
+type LdaMod <: DisAnalModel
+	fr::ModelFrame
+	rr::DaResp
+	da::LDisAnalyis
+	ff::Formula
+end
 
-	mu = Array(Float64,p); mu = vec(mean(x,1))	# Pooled mean vector for covariance estimation
-	sigma = Array(Float64,p,p); sigma = cov(x)	# Pooled covariance matrix - is the coefficient correct?
+function wmeancov!{T<:FP}(mu::Vector{T}, sigma::Array{T}, x::Array{T}, w::Vector{T})
+	n,p = size(x)
+	length(w) == n || error("length mismatch")
+	s::FP = w[1]; ss::FP = w[1]^2; mu = w[1]*x[1,:]
+	for i = 2:n
+		s += w[i]; ss += w[i]^2; mu += w[i]*x[i,:]
+	end
+	mu = mu/s
+	xc = Array(FP,n,p)
+	for i = 1:n
+		sigma[i,:] = x[i,:] - mu
+	end
+
+
+function fitrda(rr::DaResp,mm::Array,lambda::Real,gamma::Real)
+	lk = length(levels(rr.y))
+	n,p = size(mm)
+
+	mu_k = Array(FP, p, lk)
+	mu = Array(FP,p)
+	mu = vec(mean(x,1))	# Pooled mean vector for covariance estimation
+	sigma = Array(FP,p,p)
+	sigma = cov(x)	# Pooled covariance matrix - is the coefficient correct?
 	nk = Array(Int64, k)		# Class counts
 	for i in 1:k
 		class_k = find(classes .== i)	# Indices for class k
@@ -79,15 +81,19 @@ end
 
 function rda{T<:FP}(f::Formula, df::AbstractDataFrame; lambda::Real=0.5, gamma::Real=0, priors::Vector{T}=FP[], wts::Vector{T}=FP[])
 	mf = ModelFrame(f, df)
-	mm = ModelMatrix(mf)
-	y = PooledDataArray(model_response) 	# NOTE: pooled conversion done INSIDE rda in case df is spliced (and leaves out factor levels)
+	mm = ModelMatrix(mf)[:,2:]
+	y = PooledDataArray(model_response(mf)) 	# NOTE: pooled conversion done INSIDE rda in case df is spliced (and leaves out factor levels)
 		n = length(y); k = length(levels(y)); lw = length(wts); lp = length(priors)
 		lw == 0 || lw == n || error("length(wts) = $lw should be 0 or $n") 
 	w = lw == 0 ? FP[] : copy(wts)/sum(wts)
 		lp == 0 || lp == k || error("length(priors) = $lp should be 0 or $k")
 	p = priors == k ? copy(priors) : ones(FP, k)/k
 	rr = RdaResp(y, w, p)
-
+	if lambda == 1
+		da = lda(
+	else
+		da = rda(
+	end
 end
 
 # Multiple Dispatch and alternatives
@@ -123,4 +129,20 @@ qda(f, df, gamma) = rda(f, df, 0, gamma)
 #	n == length(weight) || error("Class and prior mismatch")
 #	{class[i] => weight[i] for i = 1:n}
 #end
+
+
+
+function fitlda()
+	classlist = unique(y)
+	k = length(classlist); n,p = size(x_mat)
+
+	mu_k = Array(Float64, p, k); sigma = Array(Float64, p, p)
+	sigma = cov(x)
+	for i in 1:k
+		class_k = find(y .== i)
+		mu_k[:,i] = vec(mean(x[class_k,:], 1))
+	end
+	
+end
+
 
