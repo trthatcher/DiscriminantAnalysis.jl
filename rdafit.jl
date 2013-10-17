@@ -51,15 +51,52 @@ function wmeancov!{T<:FP}(mu::Vector{T}, sigma::Array{T}, x::Array{T}, w::Vector
 	for i = 1:n
 		sigma[i,:] = x[i,:] - mu
 	end
+end
 
+# Don't pass NAs
+groupmeans{T<:FP}(y::PooledDataArray, x::Array{T})
+	n,p = size(x); k = length(levels(y))
+	length(y) == n || error("Array lengths do not conform")
+	g = zeros(FP, k, p); nk = zeros(Int64, k)
+	for i = 1:n
+		g[y[i],:] += x[y[i], :]
+		nk[y[i]] += 1
+	end
+	for i = 1:k
+		g[i,:] = g[i,:] / nk[i]
+	end
+	(nk, g)
+end
+
+function centermatrix{T<:FP}(y::PooledDataArray, x::Array{T}, g::Array{T})
+	n,p = size(x)
+	xc = Array(FP,n,p)
+	for i = 1:n
+		xc[i,:] = x[i,:] - g[y[i],:]
+	end
+	xc
+end
+
+function whitenmatrix!{T<:FP}(X::Array{T})
+	n,p = size(X)
+	sd = zeros(FP,1,p)
+	for i = 1:n	# Find row variance
+		sd += X[i,:].^2
+	end
+	sd = sqrt(sd / (n-1))
+	for i = 1:n	# Standardize
+		x[i,:] = x[i,:] ./ sd
+	end
+	
+end
 
 function fitrda(rr::DaResp,mm::Array,lambda::Real,gamma::Real)
 	lk = length(levels(rr.y))
 	n,p = size(mm)
+	nk, mu_k = groupmeans(rr.y, mm)
+	xc = centermatrix(rr.y, mm, mu_k)
 
-	mu_k = Array(FP, p, lk)
-	mu = Array(FP,p)
-	mu = vec(mean(x,1))	# Pooled mean vector for covariance estimation
+
 	sigma = Array(FP,p,p)
 	sigma = cov(x)	# Pooled covariance matrix - is the coefficient correct?
 	nk = Array(Int64, k)		# Class counts
