@@ -13,8 +13,7 @@ end
 type RDisAnalysis <: DisAnal
 	mu::Vector
 	muk::Array
-	sigma::Array
-	sigmak::Array
+	scaling::Array
 	logpr::Vector
 end
 
@@ -39,22 +38,15 @@ type LdaMod <: DisAnalModel
 	ff::Formula
 end
 
-function wmeancov!{T<:FP}(mu::Vector{T}, sigma::Array{T}, x::Array{T}, w::Vector{T})
-	n,p = size(x)
-	length(w) == n || error("length mismatch")
-	s::FP = w[1]; ss::FP = w[1]^2; mu = w[1]*x[1,:]
-	for i = 2:n
-		s += w[i]; ss += w[i]^2; mu += w[i]*x[i,:]
-	end
-	mu = mu/s
-	xc = Array(FP,n,p)
-	for i = 1:n
-		sigma[i,:] = x[i,:] - mu
-	end
-end
 
-# Don't pass NAs
-groupmeans{T<:FP}(y::PooledDataArray, x::Array{T})
+
+
+
+# %~%~%~%~%~%~%~%~%~ Centering Functions %~%~%~%~%~%~%~%~%
+
+# Find group means
+# Don't pass NAs in the PDA or index 0 will be accessed
+function groupmeans{T<:FP}(y::PooledDataArray, x::Array{T})
 	n,p = size(x); k = length(levels(y))
 	length(y) == n || error("Array lengths do not conform")
 	g = zeros(FP, k, p); nk = zeros(Int64, k)
@@ -68,43 +60,96 @@ groupmeans{T<:FP}(y::PooledDataArray, x::Array{T})
 	(nk, g)
 end
 
-function centermatrix{T<:FP}(x::Array{T,2}, g::Array{T,2},y::PooledDataArray)
-	n,p = size(x)
-	xc = Array(FP,n,p)
-	for i = 1:n
-		xc[i,:] = x[i,:] - g[y[i],:]
-	end
-	xc
-end
-
-function centermatrix{T<:FP}(x::Array{T,2}, g::Vector{T})
-	n,p = size(x)
-	xc = Array(FP,n,p)
-	for i = 1:n
-		xc[i,:] = x[i,:] - transpose(y)
-	end
-	xc
-end
-
-
-function whitenmatrix!{T<:FP}(X::Array{T})
+# Center matrix by group mean
+function centermatrix{T<:FP}(X::Array{T,2}, g::Array{T,2},y::PooledDataArray)
 	n,p = size(X)
+	Xc = Array(FP,n,p)
 	sd = zeros(FP,1,p)
-	for i = 1:n	# Find row variance
-		sd += X[i,:].^2
+	for i = 1:n
+		Xc[i,:] = X[i,:] - g[y[i],:]
+		sd += Xc[i,:].^2
 	end
 	sd = sqrt(sd / (n-1))
-	for i = 1:n	# Standardize
-		x[i,:] = x[i,:] ./ sd
+	for i = 1:n	# BLAS improvement?
+		Xc[i,:] = Xc[i,:] ./ sd
+	Xc, sd
+end
+
+function centermatrix{T<:FP}(X::Array{T,2}, g::Array{T})
+	n,p = size(X)
+	Xc = Array(FP,n,p)
+	sd = zeros(FP,1,p)
+	for i = 1:n
+		Xc[i,:] -= g[1,:]
+		sd += Xc[i,:].^2
 	end
+	sd = sqrt(sd / (n-1))
+	for i = 1:n	# BLAS improvement?
+		Xc[i,:] = Xc[i,:] ./ sd
+	end
+	Xc, sd
+end
+
+
+
+
+
+# %~%~%~%~%~%~%~%~%~ Scaling Transformations %~%~%~%~%~%~%~%~%
+
+# Scales design matrix (modifies) and returns whitening transformation
+function whitenmatrix!{T<:FP}(X::Array{T,2})
 	
 end
 
-function fitrda(rr::DaResp,mm::Array,lambda::Real,gamma::Real)
+# Scales design matrix (modifies) and returns whitening transformation
+# and regularizes matrix
+function whitenmatrix!{T<:FP}(X::Array{T,2}, gamma::T)
+
+	S, denom
+end
+
+function whitenmatrix!{T<:FP}(X::Array{T,2}, Z::Array{T,2}, lambda::T)
+
+end
+
+function whitenmatrix!{T<:FP}(X::Array{T,2}, Z::Array{T,2}, lambda::T, gamma::T)
+	n, p = size(X)
+	Sigma = (1 - lambda) * transpose(X) * X + lambda * Z
+end
+
+
+# Fit LDA with and without gamma
+
+# Fit QDA with and without gamma (doesn't require covariance
+
+function fitrda(rr::DaResp,mm::Array,lambda::FP,gamma::Real)
 	lk = length(levels(rr.y))
 	n,p = size(mm)
 	nk, mu_k = groupmeans(rr.y, mm)
-	xc = centermatrix(rr.y, mm, mu_k)
+	Xc, sd = centermatrix(rr.y, mm, mu_k)
+	Sigma = transpose(Xc) * Xc
+	Sigma_k = Array{FP,p,p,lk)
+	for k = 1:lk
+		class_k = find(rr::y == k)
+		Sigma_k = (1-lambda) * (transpose(Xc[class_k,:]) * Xc_k[class_k,:]) + lambda * Sigma
+		Sigma_k = Sigma_k / ((1-lambda)*(n-1) + lambda*(n-p))
+		if gamma != 0
+			Sigma_k = (1-gamma)*Sigma_k + (gamma * trace(Sigma_k) / p)*eye(p)
+		end
+		# DO SVD AND GET SCALING
+	end
+
+	if lambda == 0
+
+	if lambda == 0
+		if gamma == 0
+			# do regular QDA
+		else
+			# do long QDA
+		end
+	else
+		
+	end
 
 
 	sigma = Array(FP,p,p)
