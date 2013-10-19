@@ -68,7 +68,7 @@ groupmeans{T<:FP}(y::PooledDataArray, x::Array{T})
 	(nk, g)
 end
 
-function centermatrix{T<:FP}(y::PooledDataArray, x::Array{T}, g::Array{T})
+function centermatrix{T<:FP}(x::Array{T,2}, g::Array{T,2},y::PooledDataArray)
 	n,p = size(x)
 	xc = Array(FP,n,p)
 	for i = 1:n
@@ -76,6 +76,16 @@ function centermatrix{T<:FP}(y::PooledDataArray, x::Array{T}, g::Array{T})
 	end
 	xc
 end
+
+function centermatrix{T<:FP}(x::Array{T,2}, g::Vector{T})
+	n,p = size(x)
+	xc = Array(FP,n,p)
+	for i = 1:n
+		xc[i,:] = x[i,:] - transpose(y)
+	end
+	xc
+end
+
 
 function whitenmatrix!{T<:FP}(X::Array{T})
 	n,p = size(X)
