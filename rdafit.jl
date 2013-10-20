@@ -11,16 +11,14 @@ type DaResp{T<:FP} <: ModResp
 end
 
 type RDisAnalysis <: DisAnal
-	mu::Vector
-	muk::Array
-	scaling::Array
+	means::Array
+	whiten::Array
 	logpr::Vector
 end
 
 type LDisAnalyis <: DisAnal
-	mu::Vector
-	muk::Array
-	sigma::Array
+	means::Array
+	whiten::Array
 	logpr::Vector
 end
 
@@ -92,63 +90,29 @@ end
 
 
 
-
-
-# %~%~%~%~%~%~%~%~%~ Scaling Transformations %~%~%~%~%~%~%~%~%
-
-# Scales design matrix (modifies) and returns whitening transformation
-function whitenmatrix!{T<:FP}(X::Array{T,2})
-	
-end
-
-# Scales design matrix (modifies) and returns whitening transformation
-# and regularizes matrix
-function whitenmatrix!{T<:FP}(X::Array{T,2}, gamma::T)
-
-	S, denom
-end
-
-function whitenmatrix!{T<:FP}(X::Array{T,2}, Z::Array{T,2}, lambda::T)
-
-end
-
-function whitenmatrix!{T<:FP}(X::Array{T,2}, Z::Array{T,2}, lambda::T, gamma::T)
-	n, p = size(X)
-	Sigma = (1 - lambda) * transpose(X) * X + lambda * Z
-end
-
-
 # Fit LDA with and without gamma
 
 # Fit QDA with and without gamma (doesn't require covariance
 
 function fitrda(rr::DaResp,mm::Array,lambda::FP,gamma::Real)
-	lk = length(levels(rr.y))
+	ng = length(levels(rr.y))
 	n,p = size(mm)
 	nk, mu_k = groupmeans(rr.y, mm)
 	Xc, sd = centermatrix(rr.y, mm, mu_k)
-	Sigma = transpose(Xc) * Xc
-	Sigma_k = Array{FP,p,p,lk)
-	for k = 1:lk
+	Sigma = transpose(Xc) * Xc	# NOTE: Not weighted with n-1
+	Sigma_k = Array{FP,p,p)
+	whiten = Array{FP,p,p,lk}
+	for k = 1:ng	# BLAS/LAPACK optimizations?
 		class_k = find(rr::y == k)
-		Sigma_k = (1-lambda) * (transpose(Xc[class_k,:]) * Xc_k[class_k,:]) + lambda * Sigma
-		Sigma_k = Sigma_k / ((1-lambda)*(n-1) + lambda*(n-p))
+		Sigma_k = transpose(Xc[class_k,:]) * Xc_k[class_k,:]
+		Sigma_k = (1-lambda) * Sigma_k + lambda * Sigma		# Shrink towards Pooled covariance
+			# Sigma_k = Sigma_k / ((1-lambda)*(nk[k]-1) + lambda*(n-p))
+		s, V = svd(Sigma_k)[2:3]
+		s = s ./ ((1-lambda)*(nk[k]-1) + lambda*(n-ng))
 		if gamma != 0
-			Sigma_k = (1-gamma)*Sigma_k + (gamma * trace(Sigma_k) / p)*eye(p)
+			s = s .* (1-gamma) .+ (gamma * trace(Sigma_k) / p)	# Shrink towards I * Average Eigenvalue
 		end
-		# DO SVD AND GET SCALING
-	end
-
-	if lambda == 0
-
-	if lambda == 0
-		if gamma == 0
-			# do regular QDA
-		else
-			# do long QDA
-		end
-	else
-		
+		whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 	end
 
 
