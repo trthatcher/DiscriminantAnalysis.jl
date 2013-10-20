@@ -19,9 +19,9 @@ module DA
 
 	abstract ModResp
 
-	abstract DisAnal
+	abstract DisAnalysis
 
-	abstract DisAnalModel
+	abstract DisAnalysisModel
 
 	include("rdafit.jl")
 	include("kfdfit.jl")

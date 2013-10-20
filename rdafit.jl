@@ -10,41 +10,52 @@ type DaResp{T<:FP} <: ModResp
 	end
 end
 
-type RDisAnalysis <: DisAnal
-	means::Array
-	whiten::Array
-	logpr::Vector
+type RDisAnalysis{T<:FP} <: DisAnalysis
+	means::Matrix{T}
+	whiten::Array{T,3}
+	logpr::Vector{T}
 end
 
-type LDisAnalyis <: DisAnal
-	means::Array
-	whiten::Array
-	logpr::Vector
+type LDisAnalyis{T<:FP} <: DisAnalyis
+	means::Matrix{T}
+	whiten::Matrix{T}
+	logpr::Vector{T}
 end
 
-type RdaMod <: DisAnalModel
+type RdaMod <: DisAnalysisModel
 	fr::ModelFrame
 	rr::DaResp
 	da::RDisAnalyis
 	ff::Formula
+	gg::Real
+	ll::Real
 end
 
-type LdaMod <: DisAnalModel
+type LdaMod <: DisAnalysisModel
 	fr::ModelFrame
 	rr::DaResp
 	da::LDisAnalyis
 	ff::Formula
+	gg::Real
+end
+
+type QdaMod <: DisAnalysisModel
+	fr::ModelFrame
+	rr::DaResp
+	da::RDisAnalyis
+	ff::Formula
+	gg::Real
 end
 
 
 
 
 
-# %~%~%~%~%~%~%~%~%~ Centering Functions %~%~%~%~%~%~%~%~%
+# %~%~%~%~%~%~%~%~%~% Helper Functions %~%~%~%~%~%~%~%~%
 
 # Find group means
 # Don't pass NAs in the PDA or index 0 will be accessed
-function groupmeans{T<:FP}(y::PooledDataArray, x::Array{T})
+function groupmeans{T<:FP}(y::PooledDataArray, x::Matrix{T})
 	n,p = size(x); k = length(levels(y))
 	length(y) == n || error("Array lengths do not conform")
 	g = zeros(FP, k, p); nk = zeros(Int64, k)
@@ -59,7 +70,7 @@ function groupmeans{T<:FP}(y::PooledDataArray, x::Array{T})
 end
 
 # Center matrix by group mean
-function centermatrix{T<:FP}(X::Array{T,2}, g::Array{T,2},y::PooledDataArray)
+function centermatrix{T<:FP}(X::Matrix{T}, g::Matrix{T},y::PooledDataArray)
 	n,p = size(X)
 	Xc = Array(FP,n,p)
 	sd = zeros(FP,1,p)
@@ -70,10 +81,10 @@ function centermatrix{T<:FP}(X::Array{T,2}, g::Array{T,2},y::PooledDataArray)
 	sd = sqrt(sd / (n-1))
 	for i = 1:n	# BLAS improvement?
 		Xc[i,:] = Xc[i,:] ./ sd
-	Xc, sd
+	(Xc, sd)
 end
 
-function centermatrix{T<:FP}(X::Array{T,2}, g::Array{T})
+function centermatrix{T<:FP}(X::Matrix{T}, g::Matrix{T})
 	n,p = size(X)
 	Xc = Array(FP,n,p)
 	sd = zeros(FP,1,p)
@@ -85,23 +96,32 @@ function centermatrix{T<:FP}(X::Array{T,2}, g::Array{T})
 	for i = 1:n	# BLAS improvement?
 		Xc[i,:] = Xc[i,:] ./ sd
 	end
-	Xc, sd
+	(Xc, sd)
 end
 
 
+# %~%~%~%~%~%~%~%~%~% Fitting Functions %~%~%~%~%~%~%~%~%
 
-# Fit LDA with and without gamma
 
-# Fit QDA with and without gamma (doesn't require covariance
+# Fit LDA
+function fitlda()
+	true
+end
 
-function fitrda(rr::DaResp,mm::Array,lambda::FP,gamma::Real)
-	ng = length(levels(rr.y))
-	n,p = size(mm)
-	nk, mu_k = groupmeans(rr.y, mm)
+# Fit QDA
+functon fitqda()
+	true
+end
+
+# Fit RDA 
+function fitrda{T<:FP}(rr::DaResp,mm::Matrix{T},lambda::T,gamma::Real)
+	ng::Int64 = length(levels(rr.y))
+	n::Int64,p::Int64 = size(mm)
+	nk::Vector{Int64}, mu_k = groupmeans(rr.y, mm)
 	Xc, sd = centermatrix(rr.y, mm, mu_k)
 	Sigma = transpose(Xc) * Xc	# NOTE: Not weighted with n-1
 	Sigma_k = Array{FP,p,p)
-	whiten = Array{FP,p,p,lk}
+	whiten_k = Array{FP,p,p,lk}
 	for k = 1:ng	# BLAS/LAPACK optimizations?
 		class_k = find(rr::y == k)
 		Sigma_k = transpose(Xc[class_k,:]) * Xc_k[class_k,:]
@@ -110,35 +130,22 @@ function fitrda(rr::DaResp,mm::Array,lambda::FP,gamma::Real)
 		s, V = svd(Sigma_k)[2:3]
 		s = s ./ ((1-lambda)*(nk[k]-1) + lambda*(n-ng))
 		if gamma != 0
-			s = s .* (1-gamma) .+ (gamma * trace(Sigma_k) / p)	# Shrink towards I * Average Eigenvalue
+			s = s .* (1-gamma) .+ (gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
 		end
-		whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
+		whiten_k[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 	end
-
-
-	sigma = Array(FP,p,p)
-	sigma = cov(x)	# Pooled covariance matrix - is the coefficient correct?
-	nk = Array(Int64, k)		# Class counts
-	for i in 1:k
-		class_k = find(classes .== i)	# Indices for class k
-		nk[i] = length(class_k)
-		mu_k[:,i] = vec(mean(x[class_k,:],1))
-		xc = Array(Float64,nk[i],p)
-		for j in 1:nk[i]
-			xc[j,:] = x[class_k[j],:] - mu_k[:,i]'	# Center the x matrix (mean has been computed)
-		end
-		sigma_k[:,:,i] = ((1-lambda)*(xc' * xc) + lambda * sigma)/((1-lambda)*nk[i] + lambda*n)
-	end
+	(mu_k,whiten_k)
 end
 
 
 
+# %~%~%~%~%~%~%~%~%~% Wrapper Functions %~%~%~%~%~%~%~%~%
 
 
-function rda{T<:FP}(f::Formula, df::AbstractDataFrame; lambda::Real=0.5, gamma::Real=0, priors::Vector{T}=FP[], wts::Vector{T}=FP[])
+function rda{T<:FP}(f::Formula, df::AbstractDataFrame; priors::Vector{T}=FP[], lambda::Real=0.5, gamma::Real=0)
 	mf = ModelFrame(f, df)
 	mm = ModelMatrix(mf)[:,2:]
-	y = PooledDataArray(model_response(mf)) 	# NOTE: pooled conversion done INSIDE rda in case df is spliced (and leaves out factor levels)
+	y = PooledDataArray(model_response(mf)) 	# NOTE: pooled conversion done INSIDE rda in case df leaves out factor levels
 		n = length(y); k = length(levels(y)); lw = length(wts); lp = length(priors)
 		lw == 0 || lw == n || error("length(wts) = $lw should be 0 or $n") 
 	w = lw == 0 ? FP[] : copy(wts)/sum(wts)
@@ -146,59 +153,20 @@ function rda{T<:FP}(f::Formula, df::AbstractDataFrame; lambda::Real=0.5, gamma::
 	p = priors == k ? copy(priors) : ones(FP, k)/k
 	rr = RdaResp(y, w, p)
 	if lambda == 1
-		da = lda(
+		da = fitlda()
+	elseif lambda == 0
+		da = fitqda()
 	else
-		da = rda(
+		da = RDisAnalysis(fitrda(rr,mm, lambda, gamma), log(priors))
+		RdaMod(mf,rr,da,f,lambda,gamma)
 	end
 end
 
 # Multiple Dispatch and alternatives
-lda(f, df) = rda(f, df, 1, 0)
-lda(f, df, gamma) = rda(f, df, 1, gamma)
-qda(f, df) = rda(f, df, 0, 0)
-qda(f, df, gamma) = rda(f, df, 0, gamma)
+#lda(f, df) = rda(f, df, 1, 0)
+#lda(f, df, gamma) = rda(f, df, 1, gamma)
+#qda(f, df) = rda(f, df, 0, 0)
+#qda(f, df, gamma) = rda(f, df, 0, gamma)
 
-#function rda{T <: FP}(f::Formula, df::AbstractDataFrame; lambda::Real = 0.0, gamma::Real = 0.0, priors::Union(Vector{T},Dict)=FP[], wts=FP[])
-#	mf = ModelFrame(f, df)
-#	mm = ModelMatrix(mf)
-#		#mf.terms.response || error("Model formula one-sided")
-#		#y = mf.df[:,1]
-#		#isa(y, PooledDataArray) || error("Response vector is not a PooledDataArray")
-#	y = PooledDataArray(model_response) # ISSUE: levels(iris[1:100,:]["Species"]) returns three levels when there's two
-#	n = length(y); k = length(levels(y)); lw = length(wts)
-#	if isa(priors, Dict)
-#		# Check if the collection is complete
-#		d = priors
-#	else
-#		lw = length(wts)
-#		if lw == 0 
-#			
-#		#d = isa(priors, Vector{T}) ? Priors(levels(y), priors) : priors
-#	end
-#	rr = RdaResp(y, wts, d)
-#end
-
-
-# Create dictionary for priors
-#function Priors{T<:FP}(class::Vector, weight::Vector{T})
-#	n = length(class)
-#	n == length(weight) || error("Class and prior mismatch")
-#	{class[i] => weight[i] for i = 1:n}
-#end
-
-
-
-function fitlda()
-	classlist = unique(y)
-	k = length(classlist); n,p = size(x_mat)
-
-	mu_k = Array(Float64, p, k); sigma = Array(Float64, p, p)
-	sigma = cov(x)
-	for i in 1:k
-		class_k = find(y .== i)
-		mu_k[:,i] = vec(mean(x[class_k,:], 1))
-	end
-	
-end
 
 
