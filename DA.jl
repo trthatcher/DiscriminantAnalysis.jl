@@ -4,10 +4,12 @@ module DA
 	
 	using DataFrames
 
-	import DataFrames: ModelFrame, ModelMatrix, model_response
+	import DataFrames: ModelFrame, ModelMatrix, model_response, PooledDataVector, PooledDataArray
 
 	export			# types
-		RdaResp,
+		DaResp,
+		LdaMod,
+		QdaMod,
 		RdaMod,
 
 				# functions
