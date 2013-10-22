@@ -15,7 +15,10 @@ module DA
 				# functions
 		rda,	# Regularized Discriminant Analysis (qda to lda shrinkage)
 		lda,	# Linear Discriminant Analysis (with ridge analogue)
-		qda	# Quadratic Discriminant Analysis (with ridge analogue)
+		qda,	# Quadratic Discriminant Analysis (with ridge analogue)
+
+		groupmeans,
+		centermatrix
 
 	typealias FP FloatingPoint
 
