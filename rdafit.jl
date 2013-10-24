@@ -178,9 +178,23 @@ function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[
 	return res
 end
 
+function nclasses{T<:DisAnalysisModel}(mod::T)
+	return length(mod.dr.counts)
+end
+
 # Multiple Dispatch and alternatives
 #function lda(f, df; priors=FP[], gamma=0) = rda(f, df; priors=priors, lambda=1, gamma=gamma)
 #function qda(f, df; priors=FP[], gamma=0) = rda(f, df; priors=priors, lambda=0, gamma=gamma)
 
+
+function predict{T<:DisAnalysisModel}(mod::T, X::Matrix)
+	ng = length(mod.dr.counts)
+	n,p = size(X)
+	disf = Array(Float64,n,ng)
+	for k = 1:ng
+		disf[:,k] = mapslices(x-> norm((x .- mod.da.means[k,:]) * mod.da.whiten[:,:,k])^2, X, 2)
+	end
+	return disf
+end
 
 
