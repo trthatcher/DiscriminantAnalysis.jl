@@ -16,6 +16,8 @@ module DA
 		rda,	# Regularized Discriminant Analysis (qda to lda shrinkage)
 		lda,	# Linear Discriminant Analysis (with ridge analogue)
 		qda,	# Quadratic Discriminant Analysis (with ridge analogue)
+		predict,
+		nclasses,
 
 		groupmeans,
 		centermatrix
@@ -24,9 +26,9 @@ module DA
 
 	abstract ModResp
 
-	abstract DisAnalysis
+	abstract DaPred
 
-	abstract DisAnalysisModel
+	abstract DaModel
 
 	include("rdafit.jl")
 	include("kfdfit.jl")

@@ -14,79 +14,53 @@ type DaResp{T<:FP} <: ModResp
 	end
 end
 
-type RDisAnalysis{T<:FP} <: DisAnalysis
-	X::Matrix{T}
-	means::Matrix{T}
+abstract Discr
+
+type RegDiscr{T<:FP} <: Discr
 	whiten::Array{T,3}
-	logpr::Vector{T}
 	lambda::T
 	gamma::Real
-	function RDisAnalysis(r::DaResp, X::Matrix{T}, lambda::T, gamma=0)
-		k = length(r.counts)
-		n, p = size(X)
-		means = groupmeans(r, X)
-		whiten = Array(Float64,p,p,k)
-		logpr = log(r.priors)
-		new(X,means,whiten,logpr,lambda,gamma)
-	end
 end
 
-type LDisAnalysis{T<:FP} <: DisAnalysis
-	X::Matrix{T}
-	means::Matrix{T}
+type LinDiscr{T<:FP} <: Discr
 	whiten::Matrix{T}
-	logpr::Vector{T}
 	gamma::Real
-	function RDisAnalysis(r::DaResp, X::Matrix{T}, gamma=0)
-		k = length(r.counts)
-		n, p = size(X)
-		means = groupmeans(r, X)
-		whiten = Array(Float64,p,p)
-		logpr = log(r.priors)
-		new(X,means,whiten,logpr,gamma)
-	end
 end
 
-type QDisAnalysis{T<:FP} <: DisAnalysis
+type QuadDiscr{T<:FP} <: Discr
+	whiten::Array{T,3}
+	gamma::Real
+end
+
+type RdaPred{T<:FP, U<:Discr} <: DaPred
 	X::Matrix{T}
 	means::Matrix{T}
-	whiten::Array{T,3}
+	Discrim::U
 	logpr::Vector{T}
-	gamma::Real
-	function RDisAnalysis(r::DaResp, X::Matrix{T}, gamma=0)
+	function RdaPred(r::DaResp, X::Matrix{T}, lambda, gamma=0)
 		k = length(r.counts)
 		n, p = size(X)
 		means = groupmeans(r, X)
-		whiten = Array(Float64,p,p,k)
 		logpr = log(r.priors)
-		new(X,means,whiten,logpr,gamma)
+		if lambda = 1
+			D = LinDiscr(Array(Float64,p,p), gamma)
+		elseif lambda = 0
+			D = QuadDiscr(Array(Float64,p,p,k), gamma)
+		else
+			D = QuadDiscr(Array(Float64,p,p,k), lambda, gamma)
+		end
+		new(X,means,U,logpr)
 	end
+
 end
 
 
-type RdaMod <: DisAnalysisModel
+type RdaMod{T<:DaPred} <: DaModel
 	fr::ModelFrame
 	dr::DaResp
-	da::RDisAnalysis
+	da::DaPred
 	ff::Formula
 end
-
-type LdaMod <: DisAnalysisModel
-	fr::ModelFrame
-	dr::DaResp
-	da::LDisAnalysis
-	ff::Formula
-end
-
-type QdaMod <: DisAnalysisModel
-	fr::ModelFrame
-	dr::DaResp
-	da::QDisAnalysis
-	ff::Formula
-end
-
-
-
 
 
 # %~%~%~%~%~%~%~%~%~% Helper Functions %~%~%~%~%~%~%~%~%
