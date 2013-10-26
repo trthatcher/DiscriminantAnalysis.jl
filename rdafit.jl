@@ -32,34 +32,34 @@ type QuadDiscr{T<:FP} <: Discr
 	gamma::Real
 end
 
-type RdaPred{T<:FP, U<:Discr} <: DaPred
+type RdaPred{T<:FP} <: DaPred
 	X::Matrix{T}
 	means::Matrix{T}
-	Discrim::U
+	discr::Discr
 	logpr::Vector{T}
 	function RdaPred(r::DaResp, X::Matrix{T}, lambda, gamma=0)
 		k = length(r.counts)
 		n, p = size(X)
 		means = groupmeans(r, X)
 		logpr = log(r.priors)
-		if lambda = 1
-			D = LinDiscr(Array(Float64,p,p), gamma)
-		elseif lambda = 0
-			D = QuadDiscr(Array(Float64,p,p,k), gamma)
+		if lambda == 1
+			discr = LinDiscr(Array(Float64,p,p), gamma)
+		elseif lambda == 0
+			discr = QuadDiscr(Array(Float64,p,p,k), gamma)
 		else
-			D = QuadDiscr(Array(Float64,p,p,k), lambda, gamma)
+			discr = RegDiscr(Array(Float64,p,p,k), lambda, gamma)
 		end
-		new(X,means,U,logpr)
+		new(X,means,discr,logpr)
 	end
 
 end
 
 
-type RdaMod{T<:DaPred} <: DaModel
-	fr::ModelFrame
+type DaModel
+	mf::ModelFrame
 	dr::DaResp
-	da::DaPred
-	ff::Formula
+	dp::DaPred
+	f::Formula
 end
 
 
@@ -90,7 +90,7 @@ function centermatrix{T<:FP, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index::Vect
 		Xc[i,:] = X[i,:] - M[index[i],:]
 		sd += Xc[i,:].^2
 	end
-	sd = sqrt(sd/(n-1))
+	sd = sqrt(sd/(n-1))	# Unbiased estiate of the sd
 	for i = 1:n	# BLAS improvement?
 		Xc[i,:] = Xc[i,:] ./ sd
 	end
@@ -98,27 +98,32 @@ function centermatrix{T<:FP, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index::Vect
 end
 
 
-# %~%~%~%~%~%~%~%~%~% Fitting Functions %~%~%~%~%~%~%~%~%
+# %~%~%~%~%~%~%~%~%~% Fit Function %~%~%~%~%~%~%~%~%
 
 
 # Rework to have response
-function fitda!(dr::DaResp, da::RDisAnalysis)
-	println(dr)
+function fitda!(dr::DaResp, dp::RdaPred)
 	ng = length(dr.counts)
-	n, p = size(da.X)
-	Xc, sd = centermatrix(da.X,da.means,dr.y.refs)
+	n, p = size(dp.X)
+	Xc, sd = centermatrix(dp.X,dp.means,dr.y.refs)
 	Sigma = transpose(Xc) * Xc	# NOTE: Not weighted with n-1
 	Sigma_k = Array(Float64,p,p)
-	for k = 1:ng	# BLAS/LAPACK optimizations?
-		class_k = find(dr.y.refs .== k)
-		Sigma_k = transpose(Xc[class_k,:]) * Xc[class_k,:]
-		Sigma_k = (1-da.lambda) * Sigma_k + da.lambda * Sigma		# Shrink towards Pooled covariance		
-		s::Vector{Float64}, V::Matrix{Float64} = svd(Sigma_k)[2:3]
-		s = s ./ ((1-da.lambda)*(dr.counts[k]-1) + da.lambda*(n-ng))
-		if da.gamma != 0
-			s = s .* (1-da.gamma) .+ (da.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
+	if isa(dp.discr, RegDiscr) 
+		for k = 1:ng	# BLAS/LAPACK optimizations?
+			class_k = find(dr.y.refs .== k)
+			Sigma_k = transpose(Xc[class_k,:]) * Xc[class_k,:]
+			Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma		# Shrink towards Pooled covariance		
+			s::Vector{Float64}, V::Matrix{Float64} = svd(Sigma_k)[2:3]
+			s = s ./ ((1-dp.discr.lambda)*(dr.counts[k]-1) + dp.discr.lambda*(n-ng))
+			if dp.discr.gamma != 0
+				s = s .* (1-dp.discr.gamma) .+ (dp.discr.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
+			end
+			dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 		end
-		da.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
+	elseif isa(dp.discr, LinDiscr)
+		
+	else
+		error("Not a valid RdaPred subtype")
 	end
 end
 
@@ -138,21 +143,12 @@ function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[
 		lp == 0 || lp == k || error("length(priors) = $lp should be 0 or $k")
 	pr = lp == k ? copy(priors) : ones(Float64, k)/k
 	dr = DaResp{Float64}(y, pr)
-	if lambda == 1
-		#da = fitlda()
-		#res 
-	elseif lambda == 0
-		#da = fitqda()
-		#res
-	else
-		da = RDisAnalysis{Float64}(dr, mm, lambda, gamma)
-		fitda!(dr,da)
-		res = RdaMod(mf,dr,da,f)
-	end
-	return res
+	dp = RdaPred{Float64}(dr, mm, lambda, gamma)
+	fitda!(dr,dp)
+	return DaModel(mf,dr,dp,f)
 end
 
-function nclasses{T<:DisAnalysisModel}(mod::T)
+function nclasses(mod::DaModel)
 	return length(mod.dr.counts)
 end
 
@@ -161,14 +157,14 @@ end
 #function qda(f, df; priors=FP[], gamma=0) = rda(f, df; priors=priors, lambda=0, gamma=gamma)
 
 
-function predict{T<:DisAnalysisModel}(mod::T, X::Matrix)
-	ng = length(mod.dr.counts)
-	n,p = size(X)
-	disf = Array(Float64,n,ng)
-	for k = 1:ng
-		disf[:,k] = mapslices(x-> norm((x .- mod.da.means[k,:]) * mod.da.whiten[:,:,k])^2, X, 2)
-	end
-	return disf
-end
+#function predict{T<:DisAnalysisModel}(mod::T, X::Matrix)
+#	ng = length(mod.dr.counts)
+#	n,p = size(X)
+#	disf = Array(Float64,n,ng)
+#	for k = 1:ng
+#		disf[:,k] = mapslices(x-> norm((x .- mod.dp.means[k,:]) * mod.dp.whiten[:,:,k])^2, X, 2)
+#	end
+#	return disf
+#end
 
 

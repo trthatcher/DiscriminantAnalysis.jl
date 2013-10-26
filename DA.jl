@@ -28,8 +28,6 @@ module DA
 
 	abstract DaPred
 
-	abstract DaModel
-
 	include("rdafit.jl")
 	include("kfdfit.jl")
 

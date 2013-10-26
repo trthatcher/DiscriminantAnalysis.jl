@@ -21,3 +21,7 @@ mf = ModelFrame(fm, iris)
 mm = ModelMatrix(mf)
 
 x = rda(fm, iris)
+
+p = [1 2; 3 1; 23.2 1]
+
+#predict(x,p)
