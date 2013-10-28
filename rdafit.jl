@@ -102,26 +102,43 @@ end
 
 
 # Rework to have response
-function fitda!(dr::DaResp, dp::RdaPred)
+function fitda!(dr::DaResp, dp::RdaPred; rrlda=true)
 	ng = length(dr.counts)
 	n, p = size(dp.X)
 	Xc, sd = centermatrix(dp.X,dp.means,dr.y.refs)
-	Sigma = transpose(Xc) * Xc	# NOTE: Not weighted with n-1
-	Sigma_k = Array(Float64,p,p)
-	if isa(dp.discr, RegDiscr) 
+	if isa(dp.discr, RegDiscr)
+		Sigma = Xc' * Xc	# Compute Cov(X) for lambda regularization
+		Sigma_k = Array(Float64,p,p)
 		for k = 1:ng	# BLAS/LAPACK optimizations?
 			class_k = find(dr.y.refs .== k)
-			Sigma_k = transpose(Xc[class_k,:]) * Xc[class_k,:]
-			Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma		# Shrink towards Pooled covariance		
-			s::Vector{Float64}, V::Matrix{Float64} = svd(Sigma_k)[2:3]
+			Sigma_k = (Xc[class_k,:])' * Xc[class_k,:]
+			Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma		# Shrink towards Pooled covariance
+			EFact = eigfact(Sigma_k)
+				s = EFact[:values]
+				V = EFact[:vectors]
 			s = s ./ ((1-dp.discr.lambda)*(dr.counts[k]-1) + dp.discr.lambda*(n-ng))
 			if dp.discr.gamma != 0
 				s = s .* (1-dp.discr.gamma) .+ (dp.discr.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
 			end
 			dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 		end
+	elseif isa(dp.discr, QuadDiscr)
+		for k = 1:ng
+			class_k = find(dr.y.refs .==k)
+			s, V = svd(Xc[class_k,:])[2:3]
+			if dp.discr.gamma != 0
+				# Shrink towards (I * Average Eigenvalue)
+				s = (s .^ 2)/(dr.counts[k]-1) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
+			else	# No shrinkage
+				s = (s .^ 2)/(dr.counts[k]-1)	# Check division properly
+			end
+			dp.discr.whiten[:,:,k] = 
+		end
 	elseif isa(dp.discr, LinDiscr)
-		
+		# Do lda algorithm
+		if rrlda == true
+			# Do between variance calculation
+		end
 	else
 		error("Not a valid RdaPred subtype")
 	end
