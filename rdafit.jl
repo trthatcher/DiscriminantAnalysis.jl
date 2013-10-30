@@ -1,6 +1,6 @@
 type DaResp{T<:FP} <: ModResp
 	y::PooledDataArray	# Response vector
-	priors::Vector{T}	# Prior weights
+	priors::Vector{Float64}	# Prior weights
 	counts::Vector{Int64}	# Prior observation counts
 	function DaResp(y::PooledDataArray, priors::Vector{T})
 		k = length(priors)
@@ -16,44 +16,30 @@ end
 
 abstract Discr
 
-type RegDiscr{T<:FP} <: Discr
-	whiten::Array{T,3}
-	lambda::T
+type RegDiscr <: Discr
+	whiten::Array{Float64,3}
+	lambda::Float64
+	gamma::Real
+	coef::Matrix{Float64}
+	intercept::Vector{Float64}
+end
+
+type LinDiscr <: Discr
+	whiten::Matrix{Float64}
 	gamma::Real
 end
 
-type LinDiscr{T<:FP} <: Discr
-	whiten::Matrix{T}
+type QuadDiscr <: Discr
+	whiten::Array{Float64,3}
 	gamma::Real
 end
 
-type QuadDiscr{T<:FP} <: Discr
-	whiten::Array{T,3}
-	gamma::Real
+type RdaPred{T<:Discr} <: DaPred
+	X::Matrix{Float64}
+	means::Matrix{Float64}
+	discr::T
+	logpr::Vector{Float64}
 end
-
-type RdaPred{T<:FP} <: DaPred
-	X::Matrix{T}
-	means::Matrix{T}
-	discr::Discr
-	logpr::Vector{T}
-	function RdaPred(r::DaResp, X::Matrix{T}, lambda, gamma=0)
-		k = length(r.counts)
-		n, p = size(X)
-		means = groupmeans(r, X)
-		logpr = log(r.priors)
-		if lambda == 1
-			discr = LinDiscr(Array(Float64,p,p), gamma)
-		elseif lambda == 0
-			discr = QuadDiscr(Array(Float64,p,p,k), gamma)
-		else
-			discr = RegDiscr(Array(Float64,p,p,k), lambda, gamma)
-		end
-		new(X,means,discr,logpr)
-	end
-
-end
-
 
 type DaModel
 	mf::ModelFrame
@@ -102,46 +88,61 @@ end
 
 
 # Rework to have response
-function fitda!(dr::DaResp, dp::RdaPred; rrlda=true)
+function fitda!(dr::DaResp, dp::RdaPred{RegDiscr})
+	println("Regularized Discriminant Fit")
 	ng = length(dr.counts)
 	n, p = size(dp.X)
 	Xc, sd = centermatrix(dp.X,dp.means,dr.y.refs)
-	if isa(dp.discr, RegDiscr)
-		Sigma = Xc' * Xc	# Compute Cov(X) for lambda regularization
-		Sigma_k = Array(Float64,p,p)
-		for k = 1:ng	# BLAS/LAPACK optimizations?
-			class_k = find(dr.y.refs .== k)
-			Sigma_k = (Xc[class_k,:])' * Xc[class_k,:]
-			Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma		# Shrink towards Pooled covariance
-			EFact = eigfact(Sigma_k)
-				s = EFact[:values]
-				V = EFact[:vectors]
-			s = s ./ ((1-dp.discr.lambda)*(dr.counts[k]-1) + dp.discr.lambda*(n-ng))
-			if dp.discr.gamma != 0
-				s = s .* (1-dp.discr.gamma) .+ (dp.discr.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
-			end
-			dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
+	Sigma = Xc' * Xc	# Compute Cov(X) for lambda regularization
+	Sigma_k = Array(Float64,p,p)
+	for k = 1:ng	# BLAS/LAPACK optimizations?
+		class_k = find(dr.y.refs .== k)
+		Sigma_k = (Xc[class_k,:])' * Xc[class_k,:]
+		Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma		# Shrink towards Pooled covariance
+		EFact = eigfact(Sigma_k)
+			s = EFact[:values]
+			V = EFact[:vectors]
+		s = s ./ ((1-dp.discr.lambda)*(dr.counts[k]-1) + dp.discr.lambda*(n-ng))
+		if dp.discr.gamma != 0
+			s = s .* (1-dp.discr.gamma) .+ (dp.discr.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
 		end
-	elseif isa(dp.discr, QuadDiscr)
-		for k = 1:ng
-			class_k = find(dr.y.refs .==k)
-			s, V = svd(Xc[class_k,:])[2:3]
-			if dp.discr.gamma != 0
-				# Shrink towards (I * Average Eigenvalue)
-				s = (s .^ 2)/(dr.counts[k]-1) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
-			else	# No shrinkage
-				s = (s .^ 2)/(dr.counts[k]-1)	# Check division properly
-			end
-			dp.discr.whiten[:,:,k] = 
+		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))	# Whitening transformation for group k
+		dp.discr.coef[k,:] = dp.means[k,:] * dp.discr.whiten[:,:,k]		# mu_k in the sphered coordinates
+		dp.discr.intercept[k] = sum(dp.discr.coef[k,:] .^ 2) + dp.logpr[k]	# Constant term in quad discr function in sphered coordinates
+	end
+end
+
+function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr})
+	println("Quadratic Discriminant Analysis")
+	ng = length(dr.counts)
+	n, p = size(dp.X)
+	Xc, sd = centermatrix(dp.X,dp.means,dr.y.refs)
+	for k = 1:ng
+		class_k = find(dr.y.refs .==k)
+		s, V = svd(Xc[class_k,:])[2:3]
+		if dp.discr.gamma != 0 
+			# Shrink towards (I * Average Eigenvalue)
+			s = (s .^ 2)/(dr.counts[k]-1) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
+		else	# No shrinkage
+			s = (s .^ 2)/(dr.counts[k]-1)	# Check division properly
 		end
-	elseif isa(dp.discr, LinDiscr)
+		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
+	end
+end
+
+function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}, rrlda=true)
+	println("Linear Discriminant Analysis")
+	ng = length(dr.counts)
+	n, p = size(dp.X)
+	Xc, sd = centermatrix(dp.X,dp.means,dr.y.refs)
+	#elseif isa(dp.discr, LinDiscr)
 		# Do lda algorithm
 		if rrlda == true
 			# Do between variance calculation
 		end
-	else
-		error("Not a valid RdaPred subtype")
-	end
+	#else
+	#	error("Not a valid RdaPred subtype")
+	#end
 end
 
 
@@ -152,15 +153,24 @@ end
 
 function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[], lambda=0.5, gamma=0)
 	mf::ModelFrame = ModelFrame(f, df)
-	mm::Matrix{Float64} = ModelMatrix(mf).m[:,2:]
+	X::Matrix{Float64} = ModelMatrix(mf).m[:,2:]
+	n, p = size(X)
 	y::PooledDataVector = PooledDataArray(model_response(mf)) 	# NOTE: pooled conversion done INSIDE rda in case df leaves out factor levels
-	n = length(y)
 	k = length(levels(y))
 	lp = length(priors)
 		lp == 0 || lp == k || error("length(priors) = $lp should be 0 or $k")
 	pr = lp == k ? copy(priors) : ones(Float64, k)/k
 	dr = DaResp{Float64}(y, pr)
-	dp = RdaPred{Float64}(dr, mm, lambda, gamma)
+	if lambda == 1
+		dp = RdaPred{LinDiscr}(X, groupmeans(dr,X), LinDiscr(Array(Float64,p,p), gamma), log(pr))
+	elseif lambda == 0
+		dp = RdaPred{QuadDiscr}(X, groupmeans(dr,X), QuadDiscr(Array(Float64,p,p,k), gamma), log(pr))
+	else
+		discr = RegDiscr(Array(Float64,p,p,k), lambda, gamma, Array(Float64,k,p), Array(Float64,k))
+		println("typeof(discr):")
+		println(typeof(discr))
+		dp = RdaPred{RegDiscr}(X, groupmeans(dr,X), discr, log(pr))
+	end
 	fitda!(dr,dp)
 	return DaModel(mf,dr,dp,f)
 end

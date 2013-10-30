@@ -12,6 +12,8 @@ module DA
 		QdaMod,
 		RdaMod,
 
+		RdaPred,
+
 				# functions
 		rda,	# Regularized Discriminant Analysis (qda to lda shrinkage)
 		lda,	# Linear Discriminant Analysis (with ridge analogue)
