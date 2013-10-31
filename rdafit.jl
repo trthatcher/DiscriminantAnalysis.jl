@@ -32,6 +32,8 @@ end
 type QuadDiscr <: Discr
 	whiten::Array{Float64,3}
 	gamma::Real
+	coef::Matrix{Float64}
+	intercept::Vector{Float64}
 end
 
 type RdaPred{T<:Discr} <: DaPred
@@ -108,9 +110,24 @@ function fitda!(dr::DaResp, dp::RdaPred{RegDiscr})
 		end
 		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))	# Whitening transformation for group k
 		dp.discr.coef[k,:] = dp.means[k,:] * dp.discr.whiten[:,:,k]		# mu_k in the sphered coordinates
-		dp.discr.intercept[k] = sum(dp.discr.coef[k,:] .^ 2) + dp.logpr[k]	# Constant term in quad discr function in sphered coordinates
+		dp.discr.intercept[k] = -0.5*sum(dp.discr.coef[k,:] .^ 2) + dp.logpr[k]	# Constant term in quad discr function in sphered coordinates
 	end
 end
+
+function predict(dp::Union(RdaPred{RegDiscr},RdaPred{QuadDiscr}), X::Matrix{Float64})
+	n,p = size(X)
+	ng = length(dp.logpr)
+	Zk = Array(Float64,n,p)
+	P = Array(Float64, n, ng)
+	for k=1:ng
+		Zk = X * dp.discr.whiten[:,:,k]
+		P[:,k] = mapslices(sum, Zk .* (dp.discr.coef[k,:] .- 0.5*Zk), 2) .+ dp.discr.intercept[k]
+	end
+	println("This is P:")
+	println(P)
+	return mapslices(indmax,P,2)
+end
+
 
 function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr})
 	println("Quadratic Discriminant Analysis")
@@ -127,6 +144,8 @@ function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr})
 			s = (s .^ 2)/(dr.counts[k]-1)	# Check division properly
 		end
 		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
+		dp.discr.coef[k,:] = dp.means[k,:] * dp.discr.whiten[:,:,k]			# mu_k in the sphered coordinates
+		dp.discr.intercept[k] = -0.5*sum(dp.discr.coef[k,:] .^ 2) + dp.logpr[k]		# Constant term in quad discr function in sphered coordinates
 	end
 end
 
