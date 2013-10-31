@@ -13,7 +13,7 @@ clean_colnames!(iris)
 
 pool!(iris, ["Species"])
 
-fm = Formula(:(Species ~ Sepal_Length + Sepal_Width))
+fm = Formula(:(Species ~ Sepal_Length + Sepal_Width + Petal_Length + Petal_Width))
 
 y = iris[["Species"]][1]
 mf = ModelFrame(fm, iris)
@@ -22,6 +22,5 @@ mm = ModelMatrix(mf)
 
 x = rda(fm, iris)
 
-p = [1 2; 3 1; 23.2 1]
 
-#predict(x,p)
+p = predict(x.dp,x.dp.X)
