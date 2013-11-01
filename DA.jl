@@ -6,15 +6,13 @@ module DA
 
 	import DataFrames: ModelFrame, ModelMatrix, model_response, PooledDataVector, PooledDataArray
 
-	export			# types
+	export	# TYPES
+		DaModel,
 		DaResp,
-		LdaMod,
-		QdaMod,
-		RdaMod,
-
+		DaPred,
 		RdaPred,
 
-				# functions
+		######### FUNCTIONS
 		rda,	# Regularized Discriminant Analysis (qda to lda shrinkage)
 		lda,	# Linear Discriminant Analysis (with ridge analogue)
 		qda,	# Quadratic Discriminant Analysis (with ridge analogue)
@@ -22,14 +20,12 @@ module DA
 		nclasses,
 
 		groupmeans,
-		centermatrix
+		centermatrix,
+		fitda!
 
 	typealias FP FloatingPoint
 
-	abstract ModResp
-
-	abstract DaPred
-
+	include("types.jl")
 	include("rdafit.jl")
 	include("kfdfit.jl")
 

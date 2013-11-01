@@ -20,7 +20,7 @@ mf = ModelFrame(fm, iris)
 
 mm = ModelMatrix(mf)
 
-x = rda(fm, iris)
+x = rda(fm, iris, lambda=0.9)
 
 
-p = predict(x.dp,x.dp.X)
+p = predict(x,x.dp.X)
