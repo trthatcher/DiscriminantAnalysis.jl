@@ -14,8 +14,8 @@ function groupmeans{T<:FP}(r::DaResp, X::Matrix{T})
 	return M
 end
 
-# Center matrix by group mean
-function centermatrix{T<:FP, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index::Vector{U})
+# Center matrix by group mean AND scale columns
+function centerscalematrix{T<:FP, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index::Vector{U})
 	n,p = size(X)
 	Xc = Array(Float64,n,p)
 	sd = zeros(Float64,1,p)
@@ -36,7 +36,7 @@ end
 function fitda!(dr::DaResp, dp::RdaPred{RegDiscr})
 	ng = length(dr.counts)
 	n, p = size(dp.X)
-	Xc, sd = centermatrix(dp.X,dp.means,dr.y.refs)
+	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
 	Sigma = Xc' * Xc	# Compute Cov(X) for lambda regularization
 	Sigma_k = Array(Float64,p,p)
 	for k = 1:ng	# BLAS/LAPACK optimizations?
@@ -57,7 +57,7 @@ end
 function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr})
 	ng = length(dr.counts)
 	n, p = size(dp.X)
-	Xc, sd = centermatrix(dp.X,dp.means,dr.y.refs)
+	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
 	for k = 1:ng
 		class_k = find(dr.y.refs .==k)
 		s, V = svd(Xc[class_k,:])[2:3]
@@ -71,19 +71,22 @@ function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr})
 	end
 end
 
-function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}, rrlda=true)
+function fitda!(dr::DaResp, dp::RdaPred{LinDiscr})
 	println("Linear Discriminant Analysis")
 	ng = length(dr.counts)
 	n, p = size(dp.X)
-	Xc, sd = centermatrix(dp.X,dp.means,dr.y.refs)
-	#elseif isa(dp.discr, LinDiscr)
-		# Do lda algorithm
-		if rrlda == true
-			# Do between variance calculation
-		end
-	#else
-	#	error("Not a valid RdaPred subtype")
-	#end
+	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
+	s, V = svd(Xc)[2:3]
+	if dp.discr.gamma != 0 
+		# Shrink towards (I * Average Eigenvalue)
+		s = (s .^ 2)/(dr.counts[k]-1) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
+	else	# No shrinkage
+		s = (s .^ 2)/(dr.counts[k]-1)	# Check division properly
+	end
+	dp.discr.whiten[:,:] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
+	if rrlda == true
+		# Do between variance calculation
+	end
 end
 
 
@@ -91,7 +94,7 @@ end
 # %~%~%~%~%~%~%~%~%~% Wrapper Functions %~%~%~%~%~%~%~%~%
 
 
-function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[], lambda=0.5, gamma=0)
+function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[], lambda=0.5, gamma=0, rrlda=true)
 	mf::ModelFrame = ModelFrame(f, df)
 	X::Matrix{Float64} = ModelMatrix(mf).m[:,2:]
 	n, p = size(X)
@@ -102,7 +105,7 @@ function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[
 	pr = lp == k ? copy(priors) : ones(Float64, k)/k
 	dr = DaResp{Float64}(y, pr)
 	if lambda == 1
-		dp = RdaPred{LinDiscr}(X, groupmeans(dr,X), LinDiscr(Array(Float64,p,p), gamma), log(pr))
+		dp = RdaPred{LinDiscr}(X, groupmeans(dr,X), LinDiscr(Array(Float64,p,p), gamma, rrlda), log(pr))
 	elseif lambda == 0
 		discr = QuadDiscr(Array(Float64,p,p,k), gamma)
 		dp = RdaPred{QuadDiscr}(X, groupmeans(dr,X), discr, log(pr))
@@ -114,7 +117,7 @@ function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[
 	return DaModel(mf,dr,dp,f)
 end
 
-#function lda(f, df; priors=FP[], gamma=0) = rda(f, df; priors=priors, lambda=1, gamma=gamma)
+lda(f, df; priors=Float64[], gamma=0, rrlda=true) = rda(f, df; priors=priors, lambda=1, gamma=gamma, rrlda=rrlda)
 qda(f, df; priors=Float64[], gamma=0) = rda(f, df; priors=priors, lambda=0, gamma=gamma)
 
 # %~%~%~%~%~%~%~%~%~% Wrapper Functions %~%~%~%~%~%~%~%~%

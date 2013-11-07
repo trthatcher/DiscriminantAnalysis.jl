@@ -31,6 +31,7 @@ end
 type LinDiscr <: Discr
 	whiten::Matrix{Float64}
 	gamma::Real
+	rrlda::Bool
 end
 
 type QuadDiscr <: Discr
