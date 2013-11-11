@@ -1,4 +1,4 @@
-include("DA.jl")
+include("../src/DA.jl")
 
 using DA
 
@@ -24,3 +24,8 @@ x = rda(fm, iris, lambda=0.9)
 
 
 p = predict(x,x.dp.X)
+
+
+y = lda(fm, iris)
+
+q = predict(y, y.dp.X)

@@ -65,7 +65,7 @@ function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr})
 			# Shrink towards (I * Average Eigenvalue)
 			s = (s .^ 2)/(dr.counts[k]-1) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
 		else	# No shrinkage
-			s = (s .^ 2)/(dr.counts[k]-1)	# Check division properly
+			s = (s .^ 2)/(dr.counts[k]-1)
 		end
 		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 	end
@@ -79,13 +79,20 @@ function fitda!(dr::DaResp, dp::RdaPred{LinDiscr})
 	s, V = svd(Xc)[2:3]
 	if dp.discr.gamma != 0 
 		# Shrink towards (I * Average Eigenvalue)
-		s = (s .^ 2)/(dr.counts[k]-1) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
+		s = (s .^ 2)/(n-ng) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
 	else	# No shrinkage
-		s = (s .^ 2)/(dr.counts[k]-1)	# Check division properly
+		s = (s .^ 2)/(n-ng)	# Check division properly
 	end
 	dp.discr.whiten[:,:] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
-	if rrlda == true
-		# Do between variance calculation
+	if (rrlda == true) & (ng > 2)
+		tol = 0.0001
+		mu = sum(dr.priors .* dp.means, 1)
+		Mc = (dp.means .- mu) * dp.discr.whiten[:,:]
+		s, V = svd(Mc)[2:3]
+		rank = sum(s .> s[0]*tol)
+		print("Rank is: ")
+		println(rank)
+		dp.discr.whiten = dp.discr.whiten * V[:,1:rank]
 	end
 end
 
@@ -137,4 +144,17 @@ function pred(dp::Union(RdaPred{RegDiscr},RdaPred{QuadDiscr}), X::Matrix{Float64
 	end
 	return mapslices(indmax,P,2)
 end
+
+function pred(dp::RdaPred{LinDiscr}, X::Matrix{Float64})
+	n,p = size(X)
+	ng = length(dp.logpr)
+	Zk = Array(Float64,n,p)
+	P = Array(Float64, n, ng)
+	for k=1:ng
+		Zk = (X .- dp.means[k,:]) * dp.discr.whiten
+		P[:,k] = mapslices(x -> -0.5*sum(x .^ 2), Zk, 2) .+ dp.logpr[k]
+	end
+	return mapslices(indmax,P,2)
+end
+
 
