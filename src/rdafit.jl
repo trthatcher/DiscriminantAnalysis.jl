@@ -83,13 +83,13 @@ function fitda!(dr::DaResp, dp::RdaPred{LinDiscr})
 	else	# No shrinkage
 		s = (s .^ 2)/(n-ng)	# Check division properly
 	end
-	dp.discr.whiten[:,:] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
-	if (rrlda == true) & (ng > 2)
+	dp.discr.whiten = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
+	if (dp.discr.rrlda == true) & (ng > 2)
 		tol = 0.0001
 		mu = sum(dr.priors .* dp.means, 1)
-		Mc = (dp.means .- mu) * dp.discr.whiten[:,:]
+		Mc = (dp.means .- mu) * dp.discr.whiten
 		s, V = svd(Mc)[2:3]
-		rank = sum(s .> s[0]*tol)
+		rank = sum(s .> s[1]*tol)
 		print("Rank is: ")
 		println(rank)
 		dp.discr.whiten = dp.discr.whiten * V[:,1:rank]

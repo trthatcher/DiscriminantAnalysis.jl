@@ -26,6 +26,6 @@ x = rda(fm, iris, lambda=0.9)
 p = predict(x,x.dp.X)
 
 
-y = lda(fm, iris)
+z = lda(fm, iris)
 
-q = predict(y, y.dp.X)
+q = predict(z, z.dp.X)
