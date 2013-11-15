@@ -2,11 +2,11 @@
 
 abstract ModResp
 
-type DaResp{T<:FP} <: ModResp
+type DaResp <: ModResp
 	y::PooledDataArray	# Response vector
 	priors::Vector{Float64}	# Prior weights
 	counts::Vector{Int64}	# Prior observation counts
-	function DaResp(y::PooledDataArray, priors::Vector{T})
+	function DaResp(y::PooledDataArray, priors::Vector{Float64})
 		k = length(priors)
 		k == length(levels(y)) || error("Length mismatch priors/levels")
 		n = length(y)

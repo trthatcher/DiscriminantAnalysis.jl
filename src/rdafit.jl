@@ -42,10 +42,12 @@ function fitda!(dr::DaResp, dp::RdaPred{RegDiscr})
 	for k = 1:ng	# BLAS/LAPACK optimizations?
 		class_k = find(dr.y.refs .== k)
 		Sigma_k = (Xc[class_k,:])' * Xc[class_k,:]
-		Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma		# Shrink towards Pooled covariance
+		Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma	# Shrink towards Pooled covariance
 		EFact = eigfact(Sigma_k)
 			s = EFact[:values]
 			V = EFact[:vectors]
+		rank = sum(s .> s[1]*tol)
+		rank < p || warn("Rank deficiency detected in group $k")
 		s = s ./ ((1-dp.discr.lambda)*(dr.counts[k]-1) + dp.discr.lambda*(n-ng))
 		if dp.discr.gamma != 0
 			s = s .* (1-dp.discr.gamma) .+ (dp.discr.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
@@ -54,15 +56,16 @@ function fitda!(dr::DaResp, dp::RdaPred{RegDiscr})
 	end
 end
 
-function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr})
+function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr}; tol::Float64=0.0001)
 	ng = length(dr.counts)
 	n, p = size(dp.X)
 	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
 	for k = 1:ng
 		class_k = find(dr.y.refs .==k)
 		s, V = svd(Xc[class_k,:])[2:3]
-		if dp.discr.gamma != 0 
-			# Shrink towards (I * Average Eigenvalue)
+		rank = sum(s .> s[1]*tol)
+		rank < p || warn("Rank deficiency detected in group $k")
+		if dp.discr.gamma != 0	# Shrink towards (I * Average Eigenvalue)
 			s = (s .^ 2)/(dr.counts[k]-1) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
 		else	# No shrinkage
 			s = (s .^ 2)/(dr.counts[k]-1)
@@ -71,27 +74,24 @@ function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr})
 	end
 end
 
-function fitda!(dr::DaResp, dp::RdaPred{LinDiscr})
-	println("Linear Discriminant Analysis")
+function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}; tol::Float64=0.0001)
 	ng = length(dr.counts)
 	n, p = size(dp.X)
 	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
 	s, V = svd(Xc)[2:3]
-	if dp.discr.gamma != 0 
-		# Shrink towards (I * Average Eigenvalue)
+	rank = sum(s .> s[1]*tol)
+	rank < p || warn("Rank deficiency detected")
+	if dp.discr.gamma != 0 	# Shrink towards (I * Average Eigenvalue)
 		s = (s .^ 2)/(n-ng) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
 	else	# No shrinkage
 		s = (s .^ 2)/(n-ng)	# Check division properly
 	end
 	dp.discr.whiten = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 	if (dp.discr.rrlda == true) & (ng > 2)
-		tol = 0.0001
 		mu = sum(dr.priors .* dp.means, 1)
 		Mc = (dp.means .- mu) * dp.discr.whiten
 		s, V = svd(Mc)[2:3]
 		rank = sum(s .> s[1]*tol)
-		print("Rank is: ")
-		println(rank)
 		dp.discr.whiten = dp.discr.whiten * V[:,1:rank]
 	end
 end
@@ -101,16 +101,16 @@ end
 # %~%~%~%~%~%~%~%~%~% Wrapper Functions %~%~%~%~%~%~%~%~%
 
 
-function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[], lambda=0.5, gamma=0, rrlda=true)
-	mf::ModelFrame = ModelFrame(f, df)
-	X::Matrix{Float64} = ModelMatrix(mf).m[:,2:]
+function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[], lambda=0.5, gamma=0, rrlda=true, tol=0.0001)
+	mf = ModelFrame(f, df)
+	X = ModelMatrix(mf).m[:,2:]
 	n, p = size(X)
-	y::PooledDataVector = PooledDataArray(model_response(mf)) 	# NOTE: pooled conversion done INSIDE rda in case df leaves out factor levels
+	y = PooledDataArray(model_response(mf)) 	# NOTE: pooled conversion done INSIDE rda in case df leaves out factor levels
 	k = length(levels(y))
 	lp = length(priors)
 		lp == 0 || lp == k || error("length(priors) = $lp should be 0 or $k")
 	pr = lp == k ? copy(priors) : ones(Float64, k)/k
-	dr = DaResp{Float64}(y, pr)
+	dr = DaResp(y, pr)
 	if lambda == 1
 		dp = RdaPred{LinDiscr}(X, groupmeans(dr,X), LinDiscr(Array(Float64,p,p), gamma, rrlda), log(pr))
 	elseif lambda == 0
@@ -120,12 +120,12 @@ function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[
 		discr = RegDiscr(Array(Float64,p,p,k), lambda, gamma)
 		dp = RdaPred{RegDiscr}(X, groupmeans(dr,X), discr, log(pr))
 	end
-	fitda!(dr,dp)
+	fitda!(dr,dp,tol)
 	return DaModel(mf,dr,dp,f)
 end
 
-lda(f, df; priors=Float64[], gamma=0, rrlda=true) = rda(f, df; priors=priors, lambda=1, gamma=gamma, rrlda=rrlda)
-qda(f, df; priors=Float64[], gamma=0) = rda(f, df; priors=priors, lambda=0, gamma=gamma)
+lda(f, df; priors=Float64[], gamma=0, rrlda=true, tol=0.0001) = rda(f, df; priors=priors, lambda=1, gamma=gamma, rrlda=rrlda, tol=tol)
+qda(f, df; priors=Float64[], gamma=0, tol=0.0001) = rda(f, df; priors=priors, lambda=0, gamma=gamma, tol=tol)
 
 # %~%~%~%~%~%~%~%~%~% Wrapper Functions %~%~%~%~%~%~%~%~%
 
