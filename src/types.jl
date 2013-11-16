@@ -58,3 +58,11 @@ type DaModel
 	dp::DaPred
 	f::Formula
 end
+
+
+
+function Base.show(io::IO, mod::DaModel)
+	println("Regularized Discriminant Analysis:\n")
+	println("Lambda parameter: $(mod.dp.discr.lambda)")
+	println("Gamma parameter: $(mod.dp.discr.gamma)")
+end

@@ -33,7 +33,7 @@ end
 
 
 # Rework to have response
-function fitda!(dr::DaResp, dp::RdaPred{RegDiscr})
+function fitda!(dr::DaResp, dp::RdaPred{RegDiscr}; tol::Float64=0.0001)
 	ng = length(dr.counts)
 	n, p = size(dp.X)
 	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
@@ -46,8 +46,8 @@ function fitda!(dr::DaResp, dp::RdaPred{RegDiscr})
 		EFact = eigfact(Sigma_k)
 			s = EFact[:values]
 			V = EFact[:vectors]
-		rank = sum(s .> s[1]*tol)
-		rank < p || warn("Rank deficiency detected in group $k")
+		rank = sum(s .> maximum(s)*tol)
+		rank == p || error("Rank deficiency detected in group $k with tolerance $tol")
 		s = s ./ ((1-dp.discr.lambda)*(dr.counts[k]-1) + dp.discr.lambda*(n-ng))
 		if dp.discr.gamma != 0
 			s = s .* (1-dp.discr.gamma) .+ (dp.discr.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
@@ -62,14 +62,17 @@ function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr}; tol::Float64=0.0001)
 	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
 	for k = 1:ng
 		class_k = find(dr.y.refs .==k)
-		s, V = svd(Xc[class_k,:])[2:3]
-		rank = sum(s .> s[1]*tol)
-		rank < p || warn("Rank deficiency detected in group $k")
+		s, V = svd(Xc[class_k,:],false)[2:3]
+		if length(s) < p s =  vcat(s, zeros(p - length(s))) end
 		if dp.discr.gamma != 0	# Shrink towards (I * Average Eigenvalue)
 			s = (s .^ 2)/(dr.counts[k]-1) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
 		else	# No shrinkage
 			s = (s .^ 2)/(dr.counts[k]-1)
 		end
+		println(s)
+		rank = sum(s .> s[1]*tol)
+		println(s .> s[1]*tol)
+		rank == p || error("Rank deficiency detected in group $k with tolerance=$tol.")
 		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 	end
 end
@@ -78,14 +81,15 @@ function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}; tol::Float64=0.0001)
 	ng = length(dr.counts)
 	n, p = size(dp.X)
 	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
-	s, V = svd(Xc)[2:3]
-	rank = sum(s .> s[1]*tol)
-	rank < p || warn("Rank deficiency detected")
+	s, V = svd(Xc,false)[2:3]
+	if length(s) < p s =  vcat(s, zeros(p - length(s))) end
 	if dp.discr.gamma != 0 	# Shrink towards (I * Average Eigenvalue)
 		s = (s .^ 2)/(n-ng) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
 	else	# No shrinkage
 		s = (s .^ 2)/(n-ng)	# Check division properly
 	end
+	rank = sum(s .> s[1]*tol)
+	rank == p || error("Rank deficiency detected with tolerance=$tol.")
 	dp.discr.whiten = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 	if (dp.discr.rrlda == true) & (ng > 2)
 		mu = sum(dr.priors .* dp.means, 1)
@@ -120,7 +124,7 @@ function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[
 		discr = RegDiscr(Array(Float64,p,p,k), lambda, gamma)
 		dp = RdaPred{RegDiscr}(X, groupmeans(dr,X), discr, log(pr))
 	end
-	fitda!(dr,dp,tol)
+	fitda!(dr,dp,tol=tol)
 	return DaModel(mf,dr,dp,f)
 end
 
