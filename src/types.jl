@@ -59,10 +59,19 @@ type DaModel
 	f::Formula
 end
 
+#~%~%~%~%~%~% IO %~%~%~%~%~%~% 
+
+function printdiscr(dp::RdaPred{RegDiscr}, dr::DaResp)
+	println("Response:\n")
+	println(DataFrame(hcat(levels(dr.y), dr.priors, dr.counts), ["Group", "Prior","Count"]))
+	println("\n\nLambda: $(dp.discr.lambda)\nGamma: $(dp.discr.gamma)\n\n")
+end
 
 
 function Base.show(io::IO, mod::DaModel)
-	println("Regularized Discriminant Analysis:\n")
-	println("Lambda parameter: $(mod.dp.discr.lambda)")
-	println("Gamma parameter: $(mod.dp.discr.gamma)")
+	println(mod.f)
+	print("\n")
+	printdiscr(mod.dp, mod.dr)
+	println("Group means:")
+	println(DataFrame(hcat(levels(mod.dr.y),mod.dp.means), vcat("Group", coefnames(mod.mf)[2:])))
 end
