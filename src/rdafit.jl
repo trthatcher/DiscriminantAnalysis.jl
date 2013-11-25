@@ -2,10 +2,10 @@
 
 # Find group means
 # Don't pass NAs in the PDA or index 0 will be accessed
-function groupmeans{T<:FP}(r::DaResp, X::Matrix{T})
+function groupmeans{T<:FloatingPoint}(r::DaResp, X::Matrix{T})
 	n,p = size(X)
 	k = length(r.counts)
-	length(r.y) == n || error("Array lengths do not conform")
+	length(r.y) == n || error("X matrix and y vector column lengths do not conform")
 	M = zeros(T, k, p)
 	for i = 1:n
 		M[r.y.refs[i],:] += X[i, :]
@@ -15,7 +15,7 @@ function groupmeans{T<:FP}(r::DaResp, X::Matrix{T})
 end
 
 # Center matrix by group mean AND scale columns
-function centerscalematrix{T<:FP, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index::Vector{U})
+function centerscalematrix{T<:FloatingPoint, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index::Vector{U})
 	n,p = size(X)
 	Xc = Array(Float64,n,p)
 	sd = zeros(Float64,1,p)
@@ -29,10 +29,10 @@ function centerscalematrix{T<:FP, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index:
 end
 
 
-# %~%~%~%~%~%~%~%~%~% Fit Function %~%~%~%~%~%~%~%~%
 
+# %~%~%~%~%~%~%~%~%~% Fit Functions %~%~%~%~%~%~%~%~%
 
-# Rework to have response
+# Perform regularized discriminant analysis
 function fitda!(dr::DaResp, dp::RdaPred{RegDiscr}; tol::Float64=0.0001)
 	ng = length(dr.counts)
 	n, p = size(dp.X)
@@ -45,17 +45,18 @@ function fitda!(dr::DaResp, dp::RdaPred{RegDiscr}; tol::Float64=0.0001)
 		Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma	# Shrink towards Pooled covariance
 		EFact = eigfact(Sigma_k)
 			s = EFact[:values]
-			V = EFact[:vectors]
-		rank = sum(s .> maximum(s)*tol)
-		rank == p || error("Rank deficiency detected in group $k with tolerance $tol")
+			V = EFact[:vectors]	
 		s = s ./ ((1-dp.discr.lambda)*(dr.counts[k]-1) + dp.discr.lambda*(n-ng))
 		if dp.discr.gamma != 0
 			s = s .* (1-dp.discr.gamma) .+ (dp.discr.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
 		end
+		rank = sum(s .> maximum(s)*tol)
+		rank == p || error("Rank deficiency detected in group $k with tolerance $tol")
 		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))	# Whitening transformation for group k
 	end
 end
 
+# Perform quadratic discriminant analsis
 function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr}; tol::Float64=0.0001)
 	ng = length(dr.counts)
 	n, p = size(dp.X)
@@ -69,14 +70,13 @@ function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr}; tol::Float64=0.0001)
 		else	# No shrinkage
 			s = (s .^ 2)/(dr.counts[k]-1)
 		end
-		println(s)
 		rank = sum(s .> s[1]*tol)
-		println(s .> s[1]*tol)
 		rank == p || error("Rank deficiency detected in group $k with tolerance=$tol.")
 		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 	end
 end
 
+# Perform linear discriminant analysis (rank-reduced is default)
 function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}; tol::Float64=0.0001)
 	ng = length(dr.counts)
 	n, p = size(dp.X)
@@ -102,14 +102,16 @@ end
 
 
 
-# %~%~%~%~%~%~%~%~%~% Wrapper Functions %~%~%~%~%~%~%~%~%
+# %~%~%~%~%~%~%~%~%~% Frontend %~%~%~%~%~%~%~%~%
 
-
-function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[], lambda=0.5, gamma=0, rrlda=true, tol=0.0001)
+function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[], lambda::Real=0.5, gamma::Real=0, rrlda::Bool=true, tol::Real=0.0001)
+	(lambda >= 0) & (lambda <= 1) || error("Lambda=$lambda should be between 0 and 1 inclusive")
+	(gamma >= 0) & (gamma <= 1) || error("Gamma=$gamma should be between 0 and 1 inclusive")
+	(tol >= 0) & (tol <= 1) || error("Tolerance=$tol should be between 0 and 1 inclusive")
 	mf = ModelFrame(f, df)
 	X = ModelMatrix(mf).m[:,2:]
 	n, p = size(X)
-	y = PooledDataArray(model_response(mf)) 	# NOTE: pooled conversion done INSIDE rda in case df leaves out factor levels
+	y = PooledDataArray(model_response(mf)) 	# NOTE: pdv conversion done INSIDE rda in case df leaves out factor levels
 	k = length(levels(y))
 	lp = length(priors)
 		lp == 0 || lp == k || error("length(priors) = $lp should be 0 or $k")
@@ -131,10 +133,18 @@ end
 lda(f, df; priors=Float64[], gamma=0, rrlda=true, tol=0.0001) = rda(f, df; priors=priors, lambda=1, gamma=gamma, rrlda=rrlda, tol=tol)
 qda(f, df; priors=Float64[], gamma=0, tol=0.0001) = rda(f, df; priors=priors, lambda=0, gamma=gamma, tol=tol)
 
-# %~%~%~%~%~%~%~%~%~% Wrapper Functions %~%~%~%~%~%~%~%~%
+
+
+# %~%~%~%~%~%~%~%~%~% Predictions %~%~%~%~%~%~%~%~%
 
 function predict(mod::DaModel, X::Matrix{Float64})
-	return pred(mod.dp,X)
+	D = index_to_level(mod.dr.y)
+	return map(x->get(D,convert(Uint32,x),0), pred(mod.dp, X))
+end
+
+function predict(mod::DaModel, df::AbstractDataFrame)
+	X = ModelMatrix(ModelFrame(mod.f, df)).m[:,2:]
+	return predict(mod, X)
 end
 
 function pred(dp::Union(RdaPred{RegDiscr},RdaPred{QuadDiscr}), X::Matrix{Float64})

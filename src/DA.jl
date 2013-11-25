@@ -4,7 +4,8 @@ module DA
 	
 	using DataFrames
 
-	import DataFrames: ModelFrame, ModelMatrix, model_response, PooledDataVector, PooledDataArray
+	import DataFrames: ModelFrame, ModelMatrix, model_response
+	import DataArrays: PooledDataArray, levels, index_to_level
 
 	export	# TYPES
 		DaModel,
@@ -22,8 +23,6 @@ module DA
 		groupmeans,
 		centermatrix,
 		fitda!
-
-	typealias FP FloatingPoint
 
 	include("types.jl")
 	include("rdafit.jl")
