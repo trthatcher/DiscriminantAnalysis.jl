@@ -1,1 +1,0 @@
-# Kernel Fisher Discriminant Analysis
