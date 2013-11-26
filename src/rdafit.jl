@@ -86,7 +86,7 @@ function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}; tol::Float64=0.0001)
 	if dp.discr.gamma != 0 	# Shrink towards (I * Average Eigenvalue)
 		s = (s .^ 2)/(n-nk) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
 	else	# No shrinkage
-		s = (s .^ 2)/(n-nk)	# Check division properly
+		s = (s .^ 2)/(n-nk)
 	end
 	rank = sum(s .> s[1]*tol)
 	rank == p || error("Rank deficiency detected with tolerance=$tol.")
