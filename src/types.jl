@@ -61,17 +61,29 @@ end
 
 #~%~%~%~%~%~% IO %~%~%~%~%~%~% 
 
-function printdiscr(dp::RdaPred{RegDiscr}, dr::DaResp)
+function printdescribe(dr::DaResp)
 	println("Response:\n")
 	println(DataFrame(hcat(levels(dr.y), dr.priors, dr.counts), ["Group", "Prior","Count"]))
-	println("\n\nLambda: $(dp.discr.lambda)\nGamma: $(dp.discr.gamma)\n\n")
 end
 
+function printdescribe(d::RegDiscr)
+	println("Lambda: $(d.lambda)")
+	println("Gamma: $(d.gamma)")
+end
+
+printdescribe(d::QuadDiscr) = println("Gamma: $(d.gamma)")
+
+function printdescribe(d::LinDiscr)
+	println("Lambda: $(d.lambda)")
+	println("Rank-reduced: $(d.rrlda)")
+end
 
 function Base.show(io::IO, mod::DaModel)
 	println(mod.f)
 	print("\n")
-	printdiscr(mod.dp, mod.dr)
+	printdescribe(mod.dr)
+	print("\n")
+	printdescribe(mod.dp.discr)
 	println("Group means:")
 	println(DataFrame(hcat(levels(mod.dr.y),mod.dp.means), vcat("Group", coefnames(mod.mf)[2:])))
 end
