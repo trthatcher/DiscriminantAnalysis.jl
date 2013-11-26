@@ -74,7 +74,7 @@ end
 printdescribe(d::QuadDiscr) = println("Gamma: $(d.gamma)")
 
 function printdescribe(d::LinDiscr)
-	println("Lambda: $(d.lambda)")
+	println("Gamma: $(d.gamma)")
 	println("Rank-reduced: $(d.rrlda)")
 end
 
@@ -84,6 +84,7 @@ function Base.show(io::IO, mod::DaModel)
 	printdescribe(mod.dr)
 	print("\n")
 	printdescribe(mod.dp.discr)
-	println("Group means:")
+	print("\n")
+	println("Class means:")
 	println(DataFrame(hcat(levels(mod.dr.y),mod.dp.means), vcat("Group", coefnames(mod.mf)[2:])))
 end

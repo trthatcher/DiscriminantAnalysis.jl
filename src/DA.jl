@@ -28,7 +28,7 @@ module DA
 		means,    # The class means matrix, each row corresponds to a class mean
 		logpriors, # Logarithm of the prior probabilities
 		gamma,    # The gamma regularization parameter value (similar to ridge regression)
-		lambda,   # The lambda regularization parameter (shrinks the class covariance matrix to the pooled covariance matrix)
+		lambda    # The lambda regularization parameter (shrinks the class covariance matrix to the pooled covariance matrix)
 
 	include("types.jl")
 	include("rdafit.jl")
