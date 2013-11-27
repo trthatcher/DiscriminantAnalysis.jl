@@ -1,5 +1,4 @@
 # Discriminant Analysis
-=======================
 
 This package is for linear and quadratic regularized discriminant analysis.
 
@@ -118,6 +117,8 @@ ERROR: Rank deficiency detected with tolerance=0.1.
 ## Quadratic Discriminant Analysis
 ----------------------------------
 
+Quadratic discriminant analysis, `qda`, has all the same parameters as `lda` with the exception of `rrlda` since there is no opportunity to reduce the dimensions.
+
 ```julia
 julia> qda_mod = qda(fm, iris[train,:], gamma=0.1, tol=0.0001)
 Formula: Species ~ :(+(Sepal_Length,Sepal_Width,Petal_Length,Petal_Width))
@@ -174,6 +175,10 @@ julia> scaling(qda_mod)
 
 ## Regularized Discriminant Analysis
 ------------------------------------
+
+Regularized discriminant analysis is the same as quadratic discriminant analysis with an additional parameter.
+
+The additional parameter, `lambda`, represents the amount of shrinkage of each class covariance matrix towards the overall covariance matrix that is used in LDA. A value of `lambda = 1` will result in linear discriminant analysis whereas a value of `lambda = 0` will result in quadratic discriminant analysis. However, in both cases it is not recommended to use this generalized method and instead use the specialized methods `lda` or `qda`.
 
 ```julia
 julia> rda_mod = rda(fm, iris[train,:], lambda=0.5)
