@@ -49,9 +49,26 @@ Class means:
 [1,]        "setosa"      5.01622     3.48649      1.46757    0.243243
 [2,]    "versicolor"      5.87297     2.77568      4.23514     1.32973
 [3,]     "virginica"      6.68158     2.98158      5.59474     2.03421
+```
 
+By default, rank-reduced linear discriminant analysis is performed. This (probably) will perform a dimensionality reduction if there is more than two groups (similar to principle components analysis). 
 
+The scaling matrix is used to "sphere" or "whiten" the input data so that its sample covariance matrix is the identity matrix (this decreases the complexity of the classification computation). In other words, the whitened data has a sample covariance that corresponds to the unit n-sphere.
 
+Note: rank reduction was successful so the scaling matrix is of rank two rather than three. 
+
+```julia
+julia> scaling(lda_mod)
+4x2 Array{Float64,2}:
+  0.660804   0.849652
+  1.59634    1.81788 
+ -1.87905   -0.978034
+ -2.85134    2.14334 
+```
+
+Prediction is as simple as plugging a dataframe and the model into the predict function. The model will extract the appropriate columns from the dataframe assuming they are named correctly:
+
+```julia
 julia> lda_pred = predict(lda_mod,iris[test,:])
 38x1 PooledDataArray{UTF8String,Uint32,2}:
  "setosa"    
@@ -62,57 +79,12 @@ julia> 100*sum(lda_pred .== y[test])/length(y[test])
 100.0
 ```
 
-By default, rank-reduced linear discriminant analysis is performed. This (probably) will perform a dimensionality reduction if there is more than two groups (similar to principle components analysis). 
-
-The scaling matrix is used to "sphere" or "whiten" the input data so that its sample covariance matrix is the identity matrix (this decreases the complexity of the classification computation). In other words, the whitened data has a sample covariance that corresponds to the unit n-sphere.
-
-In the iris data set, rank reduction was successful so the scaling matrix is of rank 2 rather than three. 
-
-```julia
-julia> scaling(lda_mod)
-4x2 Array{Float64,2}:
-  0.660804   0.849652
-  1.59634    1.81788 
- -1.87905   -0.978034
- -2.85134    2.14334 
-```
 Regularized linear discriminant analysis has an additional parameter `gamma`. This regularization is analogous to ridge regression and can be used to 'nudge' a singular matrix into a non singular matrix (or help penalize the biased estimates of the eigenvalues - see paper below). This is important when the sample size is small and the sample covariance matrix may not be invertible. 
 
 The `gamma` values supplied should be between 0 and 1 inclusive. The value represents the percentage of shrinkage along the diagonals of the sample covariance matrix towards its average eigenvalue.
 
 ```julia
 julia> lda_mod = lda(fm, iris[train,:], gamma=0.2)
-Formula: Species ~ :(+(Sepal_Length,Sepal_Width,Petal_Length,Petal_Width))
-
-Response:
-
-3x3 DataFrame:
-               Group    Prior Count
-[1,]        "setosa" 0.333333    37
-[2,]    "versicolor" 0.333333    37
-[3,]     "virginica" 0.333333    38
-
-
-Gamma: 0.2
-Rank-reduced: true
-
-Class means:
-3x5 DataFrame:
-               Group Sepal_Length Sepal_Width Petal_Length Petal_Width
-[1,]        "setosa"      5.01622     3.48649      1.46757    0.243243
-[2,]    "versicolor"      5.87297     2.77568      4.23514     1.32973
-[3,]     "virginica"      6.68158     2.98158      5.59474     2.03421
-
-
-
-julia> lda_pred = predict(lda_mod,iris[test,:])
-38x1 PooledDataArray{UTF8String,Uint32,2}:
- "setosa"       
- ⋮           
- "virginica" 
-
-julia> 100*sum(lda_pred .== y[test])/length(y[test])
-97.36842105263158
 
 julia> scaling(lda_mod)
 4x2 Array{Float64,2}:
