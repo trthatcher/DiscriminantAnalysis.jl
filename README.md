@@ -3,8 +3,29 @@
 
 This package is for linear and quadratic regularized discriminant analysis.
 
+The dataframes packages is required as all of the methods accept dataframes and formulae: 
+
+```julia
+using DataFrames
+using DataArrays
+using RDatasets
+
+iris = data("datasets", "iris")
+
+clean_colnames!(iris)
+
+pool!(iris, ["Species"])
+
+y = iris[["Species"]][1]
+
+train = vec(rand(150,1) .< 0.8)
+test = train .== false
+
+fm = Formula(:(Species ~ Sepal_Length + Sepal_Width + Petal_Length + Petal_Width))
+```
+
 ## Linear Discriminant Analysis
--------------------------------
+A linear discriminant classifier can be built using the `lda` function and a dataframe. Here I am using the iris data set that I have divided into a training set (to build the classifier) and a testing set to validate against:
 
 ```julia
 julia> lda_mod = lda(fm, iris[train,:])
@@ -39,7 +60,15 @@ julia> lda_pred = predict(lda_mod,iris[test,:])
 
 julia> 100*sum(lda_pred .== y[test])/length(y[test])
 100.0
+```
 
+By default, rank-reduced linear discriminant analysis is performed. This (probably) will perform a dimensionality reduction if there is more than two groups (similar to principle components analysis). 
+
+The scaling matrix is used to "sphere" or "whiten" the input data so that its sample covariance matrix is the identity matrix (this decreases the complexity of the classification computation). In other words, the whitened data has a sample covariance that corresponds to the unit n-sphere.
+
+In the iris data set, rank reduction was successful so the scaling matrix is of rank 2 rather than three. 
+
+```julia
 julia> scaling(lda_mod)
 4x2 Array{Float64,2}:
   0.660804   0.849652
@@ -47,6 +76,9 @@ julia> scaling(lda_mod)
  -1.87905   -0.978034
  -2.85134    2.14334 
 ```
+Regularized linear discriminant analysis has an additional parameter `gamma`. This regularization is analogous to ridge regression and can be used to 'nudge' a singular matrix into a non singular matrix (or help penalize the biased estimates of the eigenvalues - see paper below). This is important when the sample size is small and the sample covariance matrix may not be invertible. 
+
+The `gamma` values supplied should be between 0 and 1 inclusive. The value represents the percentage of shrinkage along the diagonals of the sample covariance matrix towards its average eigenvalue.
 
 ```julia
 julia> lda_mod = lda(fm, iris[train,:], gamma=0.2)
@@ -90,6 +122,8 @@ julia> scaling(lda_mod)
  -1.70349    0.797025
 ```
 
+Rank-reduction can be disabled setting the parameter `rrlda` to `false`. Default is `true`. When it is disabled, we can see the scaling matrix is square:
+
 ```julia
 julia> lda_mod = lda(fm, iris[train,:], rrlda=false)
 
@@ -101,14 +135,12 @@ julia> scaling(lda_mod)
  -1.38388   -2.33625    4.27793    2.95553
 ```
 
+Lastly, a tolerance parameter can be set and is used in determining the rank of all covariance matrices. It is relative to the largest eigenvalue of the sample covariance matrix and should be between 0 and 1. 
+
 ```julia
 julia> lda_mod = lda(fm, iris[train,:], tol=0.1)
 ERROR: Rank deficiency detected with tolerance=0.1.
  in error at error.jl:21
- in fitda! at /home/tim/Projects/Julia/DA/tst/../src/rdafit.jl:92
- in rda at /home/tim/Projects/Julia/DA/tst/../src/rdafit.jl:129
- in lda at /home/tim/Projects/Julia/DA/tst/../src/rdafit.jl:133
-
 ```
 
 ## Quadratic Discriminant Analysis
