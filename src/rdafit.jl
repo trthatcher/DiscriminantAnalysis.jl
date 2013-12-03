@@ -43,9 +43,7 @@ function fitda!(dr::DaResp, dp::RdaPred{RegDiscr}; tol::Float64=0.0001)
 		class_k = find(dr.y.refs .== k)
 		Sigma_k = (Xc[class_k,:])' * Xc[class_k,:]
 		Sigma_k = (1-dp.discr.lambda) * Sigma_k + dp.discr.lambda * Sigma	# Shrink towards Pooled covariance
-		EFact = eigfact(Sigma_k)
-			s = EFact[:values]
-			V = EFact[:vectors]	
+		s, V = svd(Sigma_k,false)[2:3]
 		s = s ./ ((1-dp.discr.lambda)*(dr.counts[k]-1) + dp.discr.lambda*(n-nk))
 		if dp.discr.gamma != 0
 			s = s .* (1-dp.discr.gamma) .+ (dp.discr.gamma * trace(Sigma_k) / p)	# Shrink towards (I * Average Eigenvalue)
