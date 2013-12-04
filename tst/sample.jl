@@ -6,8 +6,6 @@ using DataFrames
 using DataArrays
 using RDatasets
 
-
-
 iris = data("datasets", "iris")
 
 clean_colnames!(iris)
@@ -46,6 +44,6 @@ qda_pred = predict(qda_mod,iris[test,:])
 
 # RDA
 rda_mod = rda(fm, iris[train,:], lambda=0.5)
-rda_pred = rredict(qda_mod,iris[test,:])
+rda_pred = predict(rda_mod,iris[test,:])
 100*sum(rda_pred .== y[test])/length(y[test])
 

@@ -14,6 +14,7 @@ module DA
 		RdaPred,
 
 		######### FUNCTIONS
+		centerscalematrix,
 		rda,	# Regularized Discriminant Analysis (qda to lda shrinkage)
 		lda,	# Linear Discriminant Analysis (with ridge analogue)
 		qda,	# Quadratic Discriminant Analysis (with ridge analogue)
@@ -32,7 +33,6 @@ module DA
 
 	include("types.jl")
 	include("rdafit.jl")
-	include("kfdfit.jl")
 
 end # module
 

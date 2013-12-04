@@ -92,7 +92,7 @@ function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}; tol::Float64=0.0001)
 	if (dp.discr.rrlda == true) & (nk > 2)
 		mu = sum(dr.priors .* dp.means, 1)
 		Mc = (dp.means .- mu) * dp.discr.whiten
-		s, V = svd(Mc)[2:3]
+		s, V = svd(Mc, false)[2:3]
 		rank = sum(s .> s[1]*tol)
 		dp.discr.whiten = dp.discr.whiten * V[:,1:rank]
 	end
