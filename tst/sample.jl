@@ -24,6 +24,8 @@ fm = Formula(:(Species ~ Sepal_Length + Sepal_Width + Petal_Length + Petal_Width
 
 lda_mod = lda(fm, iris[train,:])
 lda_pred = predict(lda_mod,iris[test,:])
+
+# Percentage accuracy
 100*sum(lda_pred .== y[test])/length(y[test])
 scaling(lda_mod)
 

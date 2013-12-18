@@ -14,7 +14,6 @@ module DA
 		RdaPred,
 
 		######### FUNCTIONS
-		centerscalematrix,
 		rda,	# Regularized Discriminant Analysis (qda to lda shrinkage)
 		lda,	# Linear Discriminant Analysis (with ridge analogue)
 		qda,	# Quadratic Discriminant Analysis (with ridge analogue)

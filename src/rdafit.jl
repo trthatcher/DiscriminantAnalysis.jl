@@ -30,7 +30,7 @@ end
 
 
 
-# %~%~%~%~%~%~%~%~%~% Fit Functions %~%~%~%~%~%~%~%~%
+# %~%~%~%~%~%~%~%~%~% Fit Methods %~%~%~%~%~%~%~%~%
 
 # Perform regularized discriminant analysis
 function fitda!(dr::DaResp, dp::RdaPred{RegDiscr}; tol::Float64=0.0001)
@@ -151,7 +151,7 @@ lambda(mod::DaModel) = lambda(mod.dp.discr)
 rankreduced(mod::DaModel) = mod.dp::RdaPred{LinDiscr} ? mod.dp.discr.rrlda : false
 
 
-# %~%~%~%~%~%~%~%~%~% Predictions %~%~%~%~%~%~%~%~%
+# %~%~%~%~%~%~%~%~%~% Prediction Methods %~%~%~%~%~%~%~%~%
 
 function predict(mod::DaModel, X::Matrix{Float64})
 	D = index_to_level(mod.dr.y)
