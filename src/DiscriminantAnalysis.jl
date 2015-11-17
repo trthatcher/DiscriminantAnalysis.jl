@@ -1,6 +1,6 @@
 using DataFrames, DataArrays
 
-module DA
+module DiscriminantAnalysis
 	
 	using DataFrames, DataArrays
 

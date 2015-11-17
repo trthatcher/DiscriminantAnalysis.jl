@@ -17,8 +17,8 @@ end
 # Center matrix by class mean AND scale columns
 function centerscalematrix{T<:FloatingPoint, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index::Vector{U})
 	n,p = size(X)
-	Xc = Array(Float64,n,p)
-	sd = zeros(Float64,1,p)
+	Xc = Array(T,n,p)
+	sd = zeros(T,1,p)
 	for i = 1:n
 		Xc[i,:] = X[i,:] - M[index[i],:]
 		sd += Xc[i,:].^2
