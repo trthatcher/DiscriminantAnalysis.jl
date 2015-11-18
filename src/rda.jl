@@ -1,7 +1,101 @@
+#==========================================================================
+  Regularized Discriminant Analysis Solvers
+==========================================================================#
+
+# Element-wise translate
+function translate!{T<:AbstractFloat}(A::Array{T}, b::T)
+    @inbounds for i = 1:length(A)
+        A[i] += b
+    end
+    A
+end
+translate!{T<:AbstractFloat}(b::T, A::Array{T}) = translate!(A, b)
+
+# S1 := (1-λ)S2 + λ
+function regularize!{T<:AbstractFloat}(S1::Matrix{T}, λ::T, S2::Matrix{T})
+    (n = size(S1,1)) == size(S1,2) || throw(DimensionMismatch("Matrix S1 must be square."))
+    (m = size(S2,1)) == size(S2,2) || throw(DimensionMismatch("Matrix S2 must be square."))
+    n == d || throw(DimensionMismatch("Matrix S1 and S2 must be of the same order."))
+    0 <= λ <= 1 || error("λ = $(λ) must be in the interval [0,1]")
+    for j = 1:n, i = 1:n
+            S1[i,j] = (1-λ)*S1[i,j] + λ*S2[i,j]
+    end
+    S1
+end
+
+function class_counts{T<:Integer}(y::Vector{T}, k::T = maximum(y))
+    counts = zeros(Int64, k)
+    for i = 1:length(y)
+        y[i] <= k || error("Index $i out of range.")
+        counts[y[i]] += 1
+    end
+    counts
+end
+
+function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k::U)
+    n, p = size(X)
+    length(y) == n || throw(DimensionMismatch("X and y must have the same number of rows."))
+    M = zeros(T, k, p)
+    for j = 1:p, i = 1:n
+        M[y[i],j] += X[i,j]
+    end
+    M
+end
+
+function center_rows!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U})
+    n, p = size(X)
+    for j = 1:p, i = 1:n
+        X[i,j] -= M[y[i],j]
+    end
+    X
+end
+
+# Create an array of class scatter matrices
+function class_covariances{T<:AbstractFloat,U<:Integer}(H::Matrix{T}, y::Vector{U}, 
+                                                        n_k::Vector{Int64} = class_counts(y))
+    k = length(n_k)
+    p = size(H,2)
+    Σ_k = Array(Array{T,2}, k)
+    for i = 1:k  # Σ_k[i] = H_i'H_i/(n_i-1)
+        Σ_k[i] = BLAS.syrk!('U', 'T', one(T)/(n_k[i]-1), H[y .== i,:], zero(T), Array(T,p,p))
+    end
+    Σ_k
+end
+
+# Use eigendecomposition to generate class whitening matrices
+function class_whiteners!{T<:AbstractFloat}(Σ_k::Array{Array{T,2},1}, γ::T)
+    for i = 1:length(Σ_k)
+        tol = eps(T) * prod(size(Σ_k[i])) * maximum(Σ_k[i])
+        Λ_i, V_i = LAPACK.syev!('V', 'U', Σ_k[i])  # Overwrite Σ_k with V such that VΛVᵀ = Σ_k
+        if γ > 0
+            μ_λ = mean(Λ_i)  # Shrink towards average eigenvalue
+            translate!(scale!(Λ_i, 1-γ), γ*μ_λ)  # Σ = VΛVᵀ => (1-γ)Σ + γI = V((1-γ)Λ + γI)Vᵀ
+        end
+        all(Λ_i .>= tol) || error("Rank deficiency detected in group $i with tolerance $tol.")
+        scale!(V_i, one(T) ./ sqrt(Λ_i))  # Scale V so it whitens H*V where H is centered X
+    end
+    Σ_k
+end
+
+# Fit regularized discriminant model
+function rda!{T<:AbstractFloat,U<:AbstractFloat}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, λ::T,
+                                                 γ::T, n_k = class_counts(y))
+    k = length(n_k)
+    H = center_rows!(X, M, y)
+    # Scale Rows?
+    Σ_k = class_covariances(H, y, n_k)
+    if λ > 0
+        Σ = H'H
+        for i = 1:k regularize!(Σ_k[i], λ, Σ) end
+    end
+    W_k = class_whiteners!(Σ_k, γ)
+end
+
 # %~%~%~%~%~%~%~%~%~% Helper Functions %~%~%~%~%~%~%~%~%
 
 # Find group means
 # Don't pass NAs in the PDA or index 0 will be accessed
+#=
 function classmeans{T<:FloatingPoint}(r::DaResp, X::Matrix{T})
 	n,p = size(X)
 	# k = length(r.counts)
@@ -13,8 +107,10 @@ function classmeans{T<:FloatingPoint}(r::DaResp, X::Matrix{T})
 	M = M ./ r.counts
 	return M
 end
+=#
 
 # Center matrix by class mean AND scale columns
+#=
 function centerscalematrix{T<:FloatingPoint, U<:Integer}(X::Matrix{T}, M::Matrix{T}, index::Vector{U})
 	n,p = size(X)
 	Xc = Array(T,n,p)
@@ -27,12 +123,13 @@ function centerscalematrix{T<:FloatingPoint, U<:Integer}(X::Matrix{T}, M::Matrix
 	Xc = Xc ./ sd	# Scale columns
 	return (Xc, vec(sd))
 end
-
+=#
 
 
 # %~%~%~%~%~%~%~%~%~% Fit Methods %~%~%~%~%~%~%~%~%
 
 # Perform regularized discriminant analysis
+#=
 function fitda!(dr::DaResp, dp::RdaPred{RegDiscr}; tol::Float64=0.0001)
 	nk = length(dr.counts)
 	n, p = size(dp.X)
@@ -53,8 +150,10 @@ function fitda!(dr::DaResp, dp::RdaPred{RegDiscr}; tol::Float64=0.0001)
 		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))	# Whitening transformation for class k
 	end
 end
+=#
 
 # Perform quadratic discriminant analsis
+#=
 function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr}; tol::Float64=0.0001)
 	nk = length(dr.counts)
 	n, p = size(dp.X)
@@ -73,8 +172,10 @@ function fitda!(dr::DaResp, dp::RdaPred{QuadDiscr}; tol::Float64=0.0001)
 		dp.discr.whiten[:,:,k] = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
 	end
 end
+=#
 
 # Perform linear discriminant analysis (rank-reduced is default)
+#=
 function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}; tol::Float64=0.0001)
 	nk = length(dr.counts)
 	n, p = size(dp.X)
@@ -97,11 +198,12 @@ function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}; tol::Float64=0.0001)
 		dp.discr.whiten = dp.discr.whiten * V[:,1:rank]
 	end
 end
-
+=#
 
 
 # %~%~%~%~%~%~%~%~%~% Frontend %~%~%~%~%~%~%~%~%
 
+#=
 function rda(f::Formula, df::AbstractDataFrame; priors::Vector{Float64}=Float64[], lambda::Real=0.5, gamma::Real=0, rrlda::Bool=true, tol::Real=0.0001)
 	(lambda >= 0) & (lambda <= 1) || error("Lambda=$lambda should be between 0 and 1 inclusive")
 	(gamma >= 0) & (gamma <= 1) || error("Gamma=$gamma should be between 0 and 1 inclusive")
@@ -130,11 +232,11 @@ end
 
 lda(f, df; priors=Float64[], gamma=0, rrlda=true, tol=0.0001) = rda(f, df; priors=priors, lambda=1, gamma=gamma, rrlda=rrlda, tol=tol)
 qda(f, df; priors=Float64[], gamma=0, tol=0.0001) = rda(f, df; priors=priors, lambda=0, gamma=gamma, tol=tol)
-
+=#
 
 
 # %~%~%~%~%~%~%~%~%~% Object Access %~%~%~%~%~%~%~%~%
-
+#=
 classes(mod::DaModel) = levels(mod.dr.y)
 priors(mod::DaModel) = mod.dr.priors
 counts(mod::DaModel) = mod.dr.counts
@@ -149,10 +251,10 @@ lambda(mod::DaModel) = lambda(mod.dp.discr)
 	lambda(d::QuadDiscr) = 0
 	lambda(d::LinDiscr) = 1
 rankreduced(mod::DaModel) = mod.dp::RdaPred{LinDiscr} ? mod.dp.discr.rrlda : false
-
+=#
 
 # %~%~%~%~%~%~%~%~%~% Prediction Methods %~%~%~%~%~%~%~%~%
-
+#=
 function predict(mod::DaModel, X::Matrix{Float64})
 	D = index_to_level(mod.dr.y)
 	return PooledDataArray(map(x->get(D,convert(Uint32,x),0), pred(mod.dp, X)))
@@ -186,5 +288,4 @@ function pred(dp::RdaPred{LinDiscr}, X::Matrix{Float64})
 	end
 	return mapslices(indmax,P,2)
 end
-
-
+=#

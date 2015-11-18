@@ -1,12 +1,11 @@
-using DataFrames, DataArrays
-
 module DiscriminantAnalysis
 	
-	using DataFrames, DataArrays
+	#using DataFrames, DataArrays
 
-	import DataFrames: ModelFrame, ModelMatrix, model_response
-	import DataArrays: PooledDataArray, levels, index_to_level
+	#import DataFrames: ModelFrame, ModelMatrix, model_response
+	#import DataArrays: PooledDataArray, levels, index_to_level
 
+    #=
 	export	######### TYPES
 		DaModel,
 		DaResp,
@@ -29,11 +28,12 @@ module DiscriminantAnalysis
 		logpriors, # Logarithm of the prior probabilities
 		gamma,    # The gamma regularization parameter value (similar to ridge regression)
 		lambda    # The lambda regularization parameter (shrinks the class covariance matrix to the pooled covariance matrix)
+=#
+    export
+        class_covariances,
+        class_whiteners!,
+        rda!
 
-	include("types.jl")
-	include("rdafit.jl")
+	include("rda.jl")
 
 end # module
-
-
-
