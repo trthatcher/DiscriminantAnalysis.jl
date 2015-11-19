@@ -51,6 +51,15 @@ function symml!(S::Matrix)
 end
 symml(S::Matrix) = symml!(copy(S))
 
+function sumsquare_columns{T<:AbstractFloat}(X::Matrix{T})
+    n, p = size(X)
+    sumsquares = zeros(n)
+    for j = 1:p, i = 1:n
+        sumsquares[i] += X[i,j]^2
+    end
+    sumsquares
+end
+
 function class_counts{T<:Integer}(y::Vector{T}, k::T = maximum(y))
     counts = zeros(Int64, k)
     for i = 1:length(y)
@@ -60,7 +69,7 @@ function class_counts{T<:Integer}(y::Vector{T}, k::T = maximum(y))
     counts
 end
 
-function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k::U)
+function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k::U = maximum(y))
     n, p = size(X)
     length(y) == n || throw(DimensionMismatch("X and y must have the same number of rows."))
     M = zeros(T, k, p)
@@ -70,9 +79,15 @@ function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k
     M
 end
 
-#=
-function class_means{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, 
-=#
+# Compute matrix of class means
+#   X is uncentered data matrix
+#   y is one-based vector of class IDs
+function class_means{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k = maximum(y))
+    M = class_totals(X, y, k)
+    n_k = class_counts(y, k)
+    scale!(one(t) ./ n_k, M)
+end
+
 
 # Center rows of X based on class mean in M
 #   X is uncentered data matrix
@@ -103,7 +118,7 @@ end
 # Use eigendecomposition to generate class whitening transform
 #   Σ_k is array of references to each Σ_i covariance matrix
 #   λ is regularization parameter in [0,1]
-function class_whiteners!{T<:AbstractFloat}(Σ_k::Array{Array{T,2},1}, γ::T = zero(T))
+function class_whiteners!{T<:AbstractFloat}(Σ_k::Array{Array{T,2},1}, γ::T)
     for i = 1:length(Σ_k)
         tol = eps(T) * prod(size(Σ_k[i])) * maximum(Σ_k[i])
         Λ_i, V_i = LAPACK.syev!('V', 'U', Σ_k[i])  # Overwrite Σ_k with V such that VΛVᵀ = Σ_k
@@ -122,30 +137,32 @@ end
 #   M is matrix of class means (one per row)
 #   y is one-based vector of class IDs
 function rda!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, λ::T, γ::T, 
-                                           n_k = class_counts(y))
+                                           scale_obs::Bool = true, n_k = class_counts(y))
     k = length(n_k)
+    n, p = size(X)
     H = center_rows!(X, M, y)
-    # Scale Rows?
+    w_σ = one(T) ./ sqrt(sumsquare_columns(X)/n)  # scaling constant vector
+    scale!(H, w_σ)
     Σ_k = class_covariances(H, y, n_k)
     if λ > 0
         Σ = H'H
-        for i = 1:k regularize!(Σ_k[i], λ, Σ) end
+        for i = 1:k 
+            regularize!(Σ_k[i], λ, Σ) 
+        end
     end
     W_k = class_whiteners!(Σ_k, γ)
+    for i = 1:k
+        scale!(W_k[i], w_σ) 
+    end
+    W_k
 end
 
 #=
-function rda{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}; M::Matrix{T} = 
+function rda{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, M::Matrix{T} = class_means(X)
+                                          lambda::T = zero(T), gamma::T = zero(T))
+    W_k = rda!(copy(X), M, y, 
 =#
 
-function row_sumsquares{T<:AbstractFloat}(X::Matrix{T})
-    n, p = size(X)
-    sumsquares = zeros(n)
-    for j = 1:p, i = 1:n
-        sumsquares[i] += X[i,j]^2
-    end
-    sumsquares
-end
 
 
 # %~%~%~%~%~%~%~%~%~% Helper Functions %~%~%~%~%~%~%~%~%
