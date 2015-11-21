@@ -115,7 +115,7 @@ end
 # Center rows of X based on class mean in M
 #   X is uncentered data matrix
 #   M is matrix of class means (one per row)
-function center_rows!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U})
+function center_classes!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U})
     n, p = size(X)
     for j = 1:p, i = 1:n
         X[i,j] -= M[y[i],j]

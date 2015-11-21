@@ -48,7 +48,7 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
                                            n_k = class_counts(y))
     k = length(n_k)
     n, p = size(X)
-    H = center_rows!(X, M, y)
+    H = center_classes!(X, M, y)
     w_σ = one(T) ./ vec(sqrt(var(X, 1)))  # scaling constant vector
     scale!(H, w_σ)
     Σ_k = class_covariances(H, y, n_k)

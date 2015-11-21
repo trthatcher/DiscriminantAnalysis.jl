@@ -5,7 +5,7 @@ p = 3;
 X = vcat([rand(Float64, n_k[i], p) .+ (10rand(1,p) .- 5) for i = 1:k]...);
 
 M = MOD.class_means(X, y)
-H = MOD.center_rows!(copy(X), M, y)
+H = MOD.center_classes!(copy(X), M, y)
 w_σ = 1.0 ./ vec(sqrt(var(X, 1)))
 MOD.scale!(H, w_σ)
 H_k = [H[y .== i,:] for i = 1:k]
