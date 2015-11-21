@@ -9,11 +9,12 @@ H = MOD.center_rows!(copy(X), M, y)
 w_σ = 1.0 ./ vec(sqrt(var(X, 1)))
 MOD.scale!(H, w_σ)
 H_k = [H[y .== i,:] for i = 1:k]
+Σ_k = [H_k[i]'H_k[i]/(n_k[i]-1) for i = 1:k]
 
 info("Testing ", MOD.class_covariances)
 for T in FloatingPointTypes
-    Σ_k = class_covariances(convert(Array{T}, copy(H)), y)
+    tst_Σ_k = class_covariances(convert(Array{T}, copy(H)), y)
     for i = 1:k
-        @test_approx_eq Σ_k[i] convert(Array{T}, H_k[i]'H_k[i]/(n_k[i]-1))
+        @test_approx_eq tst_Σ_k[i] convert(Array{T}, Σ_k[i])
     end
 end
