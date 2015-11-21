@@ -112,7 +112,6 @@ function class_means{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k 
     scale!(one(T) ./ n_k, M)
 end
 
-
 # Center rows of X based on class mean in M
 #   X is uncentered data matrix
 #   M is matrix of class means (one per row)

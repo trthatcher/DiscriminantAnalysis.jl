@@ -1,0 +1,14 @@
+language: julia
+os:
+  - linux
+  - osx
+julia:
+  - release
+  - nightly
+notifications:
+  email: false
+script:
+  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("DiscriminantAnalysis"); Pkg.test("DiscriminantAnalysis"; coverage=true)'
+after_success:
+  - julia -e 'cd(Pkg.dir("DiscriminantAnalysis")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(process_folder())'

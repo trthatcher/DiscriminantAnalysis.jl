@@ -1,14 +1,16 @@
 module DiscriminantAnalysis
 
-export
-    class_covariances,
-    class_whiteners!,
-    qda!,
-    qda,
-    predict_qda,
-    predict
+    using Base.LinAlg.BlasReal
 
-include("common.jl")
-include("qda.jl")
+    export
+        class_covariances,
+        class_whiteners!,
+        qda!,
+        qda,
+        predict_qda,
+        predict
+
+    include("common.jl")
+    include("qda.jl")
 
 end # module

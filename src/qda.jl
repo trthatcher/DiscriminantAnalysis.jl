@@ -2,7 +2,7 @@
   Regularized Discriminant Analysis Solvers
 ==========================================================================#
 
-immutable ModelQDA{T<:AbstractFloat}
+immutable ModelQDA{T<:BlasReal}
     W_k::Array{Matrix{T},1}  # Vector of class whitening matrices
     M::Matrix{T}             # Matrix of class means (one per row)
     priors::Vector{T}        # Vector of class priors
@@ -11,7 +11,7 @@ end
 # Create an array of class scatter matrices
 #   H is centered data matrix (with respect to class means)
 #   y is one-based vector of class IDs
-function class_covariances{T<:AbstractFloat,U<:Integer}(H::Matrix{T}, y::Vector{U}, 
+function class_covariances{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::Vector{U}, 
                                                         n_k::Vector{Int64} = class_counts(y))
     k = length(n_k)
     p = size(H,2)
@@ -26,7 +26,7 @@ end
 # Use eigendecomposition to generate class whitening transform
 #   Σ_k is array of references to each Σ_i covariance matrix
 #   λ is regularization parameter in [0,1]
-function class_whiteners!{T<:AbstractFloat}(Σ_k::Vector{Matrix{T}}, γ::T)
+function class_whiteners!{T<:BlasReal}(Σ_k::Vector{Matrix{T}}, γ::T)
     for i = 1:length(Σ_k)
         tol = eps(T) * prod(size(Σ_k[i])) * maximum(Σ_k[i])
         Λ_i, V_i = LAPACK.syev!('V', 'U', Σ_k[i])  # Overwrite Σ_k with V such that VΛVᵀ = Σ_k
@@ -44,12 +44,12 @@ end
 #   X in uncentered data matrix
 #   M is matrix of class means (one per row)
 #   y is one-based vector of class IDs
-function qda!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, λ::T, γ::T, 
+function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, λ::T, γ::T, 
                                            n_k = class_counts(y))
     k = length(n_k)
     n, p = size(X)
     H = center_rows!(X, M, y)
-    w_σ = one(T) ./ sqrt(dot_columns(X)/n)  # scaling constant vector
+    w_σ = one(T) ./ vec(sqrt(var(X, 1)))  # scaling constant vector
     scale!(H, w_σ)
     Σ_k = class_covariances(H, y, n_k)
     if λ > 0
@@ -65,7 +65,7 @@ function qda!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector
     W_k
 end
 
-function qda{T<:AbstractFloat,U<:Integer}(
+function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
         M::Matrix{T} = class_means(X,y),
@@ -78,7 +78,7 @@ function qda{T<:AbstractFloat,U<:Integer}(
     ModelQDA{T}(W_k, M, priors)
 end
 
-function predict_qda{T<:AbstractFloat}(W_k::Vector{Matrix{T}}, M::Matrix{T}, priors::Vector{T},
+function predict_qda{T<:BlasReal}(W_k::Vector{Matrix{T}}, M::Matrix{T}, priors::Vector{T},
                                        Z::Matrix{T})
     n, p = size(Z)
     k = length(W_k)
@@ -99,7 +99,7 @@ function predict_qda{T<:AbstractFloat}(W_k::Vector{Matrix{T}}, M::Matrix{T}, pri
     mapslices(indmax, δ, 2)
 end
 
-function predict{T<:AbstractFloat}(mod::ModelQDA{T}, Z::Matrix{T})
+function predict{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T})
     predict_qda(mod.W_k, mod.M, mod.priors, Z)
 end
 
