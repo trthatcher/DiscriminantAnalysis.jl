@@ -12,7 +12,7 @@ end
 #   H is centered data matrix (with respect to class means)
 #   y is one-based vector of class IDs
 function class_covariances{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::Vector{U}, 
-                                                        n_k::Vector{Int64} = class_counts(y))
+                                                   n_k::Vector{Int64} = class_counts(y))
     k = length(n_k)
     p = size(H,2)
     Σ_k = Array(Array{T,2}, k)
@@ -44,13 +44,13 @@ end
 #   X in uncentered data matrix
 #   M is matrix of class means (one per row)
 #   y is one-based vector of class IDs
-function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, λ::T, γ::T, 
-                                           n_k = class_counts(y))
-    k = length(n_k)
+function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, λ::T, γ::T)
+    k = maximum(y)
+    n_k = class_counts(y, k)
     n, p = size(X)
     H = center_classes!(X, M, y)
-    w_σ = one(T) ./ vec(sqrt(var(X, 1)))  # scaling constant vector
-    scale!(H, w_σ)
+    #w_σ = one(T) ./ vec(sqrt(var(X, 1)))  # scaling constant vector
+    #scale!(H, w_σ)
     Σ_k = class_covariances(H, y, n_k)
     if λ > 0
         Σ = scale!(H'H, one(T)/(n-1))
@@ -59,10 +59,10 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
         end
     end
     W_k = class_whiteners!(Σ_k, γ)
-    for i = 1:k
-        scale!(W_k[i], w_σ) 
-    end
-    W_k
+    #for i = 1:k
+    #    scale!(W_k[i], w_σ)  # scale columns of W_k
+    #end
+    #W_k
 end
 
 function qda{T<:BlasReal,U<:Integer}(
@@ -78,8 +78,12 @@ function qda{T<:BlasReal,U<:Integer}(
     ModelQDA{T}(W_k, M, priors)
 end
 
-function predict_qda{T<:BlasReal}(W_k::Vector{Matrix{T}}, M::Matrix{T}, priors::Vector{T},
-                                       Z::Matrix{T})
+function predict_qda{T<:BlasReal}(
+        W_k::Vector{Matrix{T}},
+        M::Matrix{T},
+        priors::Vector{T},
+        Z::Matrix{T}
+    )
     n, p = size(Z)
     k = length(W_k)
     size(M,2) == p || throw(DimensionMismatch("Z does not have the same number of columns as M."))
@@ -99,6 +103,4 @@ function predict_qda{T<:BlasReal}(W_k::Vector{Matrix{T}}, M::Matrix{T}, priors::
     mapslices(indmax, δ, 2)
 end
 
-function predict{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T})
-    predict_qda(mod.W_k, mod.M, mod.priors, Z)
-end
+predict{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T}) = predict_qda(mod.W_k, mod.M, mod.priors, Z)
