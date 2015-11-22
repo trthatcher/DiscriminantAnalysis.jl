@@ -9,9 +9,9 @@ y = y[σ]
 X = X[σ,:]
 M = MOD.class_means(X, y)
 Xc = MOD.center_classes!(copy(X), M, y)
-#w_σ = 1.0 ./ vec(sqrt(var(Xc, 1)))
-#H = MOD.scale!(copy(Xc), w_σ)
-H = Xc
+w_σ = 1.0 ./ vec(sqrt(var(Xc, 1)))
+H = MOD.scale!(copy(Xc), w_σ)
+#H = Xc
 Σ = H'H/(n-1)
 H_k = [H[y .== i,:] for i = 1:k]
 Σ_k = [H_k[i]'H_k[i]/(n_k[i]-1) for i = 1:k]
@@ -45,20 +45,22 @@ for T in FloatingPointTypes, U in IntegerTypes
     y_tmp = convert(Vector{U}, y)
     M_tmp = convert(Matrix{T}, M)
     Xc_tmp = convert(Matrix{T}, Xc)
+    H_tmp = convert(Matrix{T}, H)
     Σ_tmp = convert(Matrix{T}, Σ)
     Σ_k_tmp = convert(Vector{Matrix{T}}, Σ_k)
+    σ = convert(Vector{T}, 1 ./ w_σ)
     for λ in (zero(T), convert(T, 0.5), one(T)), γ in (zero(T), convert(T, 0.5), one(T))
         W_k_tmp = qda!(copy(X_tmp), M_tmp, y_tmp, λ, γ)
         for i = 1:k
-            #S = Xc_tmp[y .== i,:]'Xc_tmp[y .== i,:]/(n_k[i]-1)
-            #S = (1-λ)*S + λ*S
             S = (1-λ)*Σ_k_tmp[i] + λ*Σ_tmp  # lambda-regularization first
             S = (1-γ)*S + (γ/p)*trace(S)*I  # gamma-regularization second
-            W = W_k_tmp[i]
+            W = convert(Vector{T}, 1 ./ w_σ) .* W_k_tmp[i]  # Remove scaling transform
             @test_approx_eq W'S*W diagm(ones(T,p))
             if λ == 0 && γ == 0
-                U_k = Xc_tmp[y .== i,:] * W
-                @test_approx_eq U_k'U_k/(n_k[i]-1) diagm(ones(T,p))
+                U_k = H_tmp[y .== i,:] * W
+                @test_approx_eq U_k'U_k/(n_k[i]-1) diagm(ones(T,p))  # Test without scaling
+                U_k = Xc_tmp[y .== i,:] * W_k_tmp[i]
+                @test_approx_eq U_k'U_k/(n_k[i]-1) diagm(ones(T,p))  # Test with scaling
             end
         end
     end

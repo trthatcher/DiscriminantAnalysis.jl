@@ -49,8 +49,8 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
     n_k = class_counts(y, k)
     n, p = size(X)
     H = center_classes!(X, M, y)
-    #w_σ = one(T) ./ vec(sqrt(var(X, 1)))  # scaling constant vector
-    #scale!(H, w_σ)
+    w_σ = one(T) ./ vec(sqrt(var(X, 1)))  # scaling constant vector
+    scale!(H, w_σ)
     Σ_k = class_covariances(H, y, n_k)
     if λ > 0
         Σ = scale!(H'H, one(T)/(n-1))
@@ -59,10 +59,10 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
         end
     end
     W_k = class_whiteners!(Σ_k, γ)
-    #for i = 1:k
-    #    scale!(W_k[i], w_σ)  # scale columns of W_k
-    #end
-    #W_k
+    for i = 1:k
+        scale!(w_σ, W_k[i])  # scale rows of W_k
+    end
+    W_k
 end
 
 function qda{T<:BlasReal,U<:Integer}(
