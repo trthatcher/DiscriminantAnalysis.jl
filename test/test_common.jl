@@ -108,13 +108,13 @@ y = y[σ]
 X = X[σ,:]
 
 info("Testing ", MOD.class_counts)
-for U in (Int32, Int64)
+for U in IntegerTypes
     @test all(n_k .== MOD.class_counts(convert(Array{U}, y)))
 end
 
 info("Testing ", MOD.class_totals)
 for T in FloatingPointTypes
-    for U in (Int32, Int64)
+    for U in IntegerTypes
         X_tmp = convert(Array{T}, X)
         y_tmp = convert(Array{U}, y)
         @test_approx_eq MOD.class_totals(X_tmp, y_tmp) vcat([sum(X_tmp[y .== i,:],1) for i = 1:k]...)
@@ -123,7 +123,7 @@ end
 
 info("Testing ", MOD.class_means)
 for T in FloatingPointTypes
-    for U in (Int32, Int64)
+    for U in IntegerTypes
         X_tmp = convert(Array{T}, X)
         y_tmp = convert(Array{U}, y)        
         @test_approx_eq MOD.class_means(X_tmp, y_tmp) (MOD.class_totals(X_tmp, y_tmp) ./ n_k)
@@ -132,7 +132,7 @@ end
 
 info("Testing ", MOD.center_classes!)
 for T in FloatingPointTypes
-    for U in (Int32, Int64)
+    for U in IntegerTypes
         X_tmp = copy(convert(Array{T}, X))
         y_tmp = copy(convert(Array{U}, y))
         M = MOD.class_means(X_tmp, y_tmp)
