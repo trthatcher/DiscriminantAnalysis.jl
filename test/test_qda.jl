@@ -4,14 +4,14 @@ n = sum(n_k)
 p = 3
 y = vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...)
 X = vcat([rand(n_k[i], p) .+ (10rand(1,p) .- 5) for i = 1:k]...)
-σ = sortperm(rand(sum(n_k)))
-y = y[σ]
-X = X[σ,:]
+# Permute Data
+    σ = sortperm(rand(sum(n_k)))
+    y = y[σ]
+    X = X[σ,:]
 M = MOD.class_means(X, y)
 Xc = MOD.center_classes!(copy(X), M, y)
 w_σ = 1.0 ./ vec(sqrt(var(Xc, 1)))
 H = MOD.scale!(copy(Xc), w_σ)
-#H = Xc
 Σ = H'H/(n-1)
 H_k = [H[y .== i,:] for i = 1:k]
 Σ_k = [H_k[i]'H_k[i]/(n_k[i]-1) for i = 1:k]

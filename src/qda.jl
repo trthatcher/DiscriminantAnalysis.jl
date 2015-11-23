@@ -65,6 +65,12 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
     W_k
 end
 
+doc"""
+`qda(X, y; M = class_means(X,y), λ=0, γ=0, priors = [1/maximum(y) for i = 1:maximum(y)]`
+Fits a regularized quadratic discriminant analysis model to the data in `X` based on class 
+identifier `y`. `M` is an array of class centroids that is optionally supplied. `λ` and `γ` are
+regularization parameters that lie between 0 and 1.
+"""
 function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
@@ -73,8 +79,7 @@ function qda{T<:BlasReal,U<:Integer}(
         gamma::T = zero(T),
         priors::Vector{T} = T[1/maximum(y) for i = 1:maximum(y)]
     )
-    n_k = class_counts(y)
-    W_k = qda!(copy(X), M, y, lambda, gamma, n_k)
+    W_k = qda!(copy(X), M, y, lambda, gamma)
     ModelQDA{T}(W_k, M, priors)
 end
 
@@ -89,18 +94,21 @@ function predict_qda{T<:BlasReal}(
     size(M,2) == p || throw(DimensionMismatch("Z does not have the same number of columns as M."))
     size(M,1) == k || error("class mismatch")
     length(priors) == k || error("class mismatch")
-    δ = Array(T, n, k)      # discriminant function values
-    Z_tmp = Array(T, n, p)  # temporary array to prevent re-allocation k times
-    Z_j = Array(T, n, p)    # Z in W_k
+    δ = Array(T, n, k)  # discriminant function values
+    H = Array(T, n, p)  # temporary array to prevent re-allocation k times
+    Q = Array(T, n, p)  # Q := H*W_k
     for j = 1:k
-        translate!(copy!(Z_tmp, Z), vec(M[j,:]))
-        BLAS.gemm!('N', 'N', one(T), Z_tmp, W_k[j], zero(T), Z_j)
-        s = dot_rows(Z_j)
+        translate!(copy!(H, Z), -vec(M[j,:]))
+        s = dot_rows(BLAS.gemm!('N', 'N', one(T), H, W_k[j], zero(T), Q))
         for i = 1:n
             δ[i, j] = -s[i]/2 + log(priors[j])
         end
-    end
+end
     mapslices(indmax, δ, 2)
 end
 
+doc"""
+`predict(Model, Z)`
+Uses model on input Z.
+"""
 predict{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T}) = predict_qda(mod.W_k, mod.M, mod.priors, Z)
