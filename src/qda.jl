@@ -66,10 +66,12 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
 end
 
 doc"""
-`qda(X, y; M = class_means(X,y), λ=0, γ=0, priors = [1/maximum(y) for i = 1:maximum(y)]`
+`qda(X, y; M, lambda, gamma, priors)`
 Fits a regularized quadratic discriminant analysis model to the data in `X` based on class 
-identifier `y`. `M` is an array of class centroids that is optionally supplied. `λ` and `γ` are
-regularization parameters that lie between 0 and 1.
+identifier `y`. `M` is an optional array of class centroids (one per row). M is the observed class
+means by default. `λ` is a regularization parameter between 0 and 1 that shrinks each class 
+covariance matrix towards the overall covariance matrix. `γ` regularizes each class matrix towards
+the average eigenvalue.
 """
 function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},

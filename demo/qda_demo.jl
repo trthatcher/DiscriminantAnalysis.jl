@@ -13,4 +13,4 @@ model = qda(X, y)
 
 y_pred = predict(model, X)
 
-y_pred_labels = [get(to_label, uid, "error") for uid in prediction]
+y_pred_labels = [get(to_label, uid, "error") for uid in y_pred]
