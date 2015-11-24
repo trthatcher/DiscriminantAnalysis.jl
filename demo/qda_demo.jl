@@ -1,16 +1,15 @@
-data = readcsv(open("iris.data"))  # Read into an array of any
+using DataFrames
 
-species = unique(data[2:end,5])
-to_uid = [species[i] => i for i = 1:length(species)]
-to_label = [i => species[i] for i = 1:length(species)]
+iris_df = readtable("iris.csv")
+pool!(iris_df, [:species])  # Ensure species is made a pooled data vector
 
-X = convert(Array{Float64}, data[2:end,1:4])
-y = Int64[get(to_uid,species,-1) for species in data[2:end,5]]
+X = convert(Array{Float64}, iris_df[[:sepal_length, :sepal_width, :petal_length, :petal_width]])
+y = iris_df[:species].refs  # Class indices
 
 using DiscriminantAnalysis
 
-model = qda(X, y)
+model = qda(X, y, lambda = 0.3, gamma = 0.0, priors = [1/3; 1/3; 1/3])
 
-y_pred = predict(model, X)
+y_pred = DiscriminantAnalysis.predict(model, X)  # Note: DataFrames exports a predict() function
 
-y_pred_labels = [get(to_label, uid, "error") for uid in y_pred]
+println("Accuracy is ", round(sum(y_pred .== y)/length(y) * 100,2),"%")
