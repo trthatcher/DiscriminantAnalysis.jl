@@ -105,7 +105,7 @@ function predict_qda{T<:BlasReal}(
         for i = 1:n
             δ[i, j] = -s[i]/2 + log(priors[j])
         end
-end
+    end
     mapslices(indmax, δ, 2)
 end
 
