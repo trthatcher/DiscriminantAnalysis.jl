@@ -32,7 +32,9 @@ function class_whiteners!{T<:BlasReal}(Σ_k::Vector{Matrix{T}}, γ::T)
         Λ_i, V_i = LAPACK.syev!('V', 'U', Σ_k[i])  # Overwrite Σ_k with V such that VΛVᵀ = Σ_k
         if γ > 0
             μ_λ = mean(Λ_i)  # Shrink towards average eigenvalue
-            translate!(scale!(Λ_i, 1-γ), γ*μ_λ)  # Σ = VΛVᵀ => (1-γ)Σ + γI = V((1-γ)Λ + γI)Vᵀ
+            for j = 1:length(Λ_i)
+                Λ_i[j] = (1-γ)*Λ_i[j] + γ*μ_λ  # Σ = VΛVᵀ => (1-γ)Σ + γI = V((1-γ)Λ + γI)Vᵀ
+            end
         end
         all(Λ_i .>= tol) || error("Rank deficiency detected in class $i with tolerance $tol.")
         scale!(V_i, one(T) ./ sqrt(Λ_i))  # Scale V so it whitens H*V where H is centered X
