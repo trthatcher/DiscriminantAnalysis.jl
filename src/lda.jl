@@ -1,53 +1,101 @@
-# %~%~%~%~%~%~%~%~%~% Helper Functions %~%~%~%~%~%~%~%~%
+#==========================================================================
+  Regularized Linear Discriminant Analysis Solver
+==========================================================================#
 
-# Perform linear discriminant analysis (rank-reduced is default)
-#=
-function fitda!(dr::DaResp, dp::RdaPred{LinDiscr}; tol::Float64=0.0001)
-	nk = length(dr.counts)
-	n, p = size(dp.X)
-	Xc, sd = centerscalematrix(dp.X,dp.means,dr.y.refs)
-	s, V = svd(Xc,false)[2:3]
-	if length(s) < p s =  vcat(s, zeros(p - length(s))) end
-	if dp.discr.gamma != 0 	# Shrink towards (I * Average Eigenvalue)
-		s = (s .^ 2)/(n-nk) .* (1-dp.discr.gamma) .+ (dp.discr.gamma * sum(s) / p)
-	else	# No shrinkage
-		s = (s .^ 2)/(n-nk)
-	end
-	rank = sum(s .> s[1]*tol)
-	rank == p || error("Rank deficiency detected with tolerance=$tol.")
-	dp.discr.whiten = diagm(1 ./ sd) * V * diagm(1 ./ sqrt(s))
-	if (dp.discr.rrlda == true) & (nk > 2)
-		mu = sum(dr.priors .* dp.means, 1)
-		Mc = (dp.means .- mu) * dp.discr.whiten
-		s, V = svd(Mc, false)[2:3]
-		rank = sum(s .> s[1]*tol)
-		dp.discr.whiten = dp.discr.whiten * V[:,1:rank]
-	end
-end
-=#
-
-
-# %~%~%~%~%~%~%~%~%~% Prediction Methods %~%~%~%~%~%~%~%~%
-#=
-function predict(mod::DaModel, X::Matrix{Float64})
-	D = index_to_level(mod.dr.y)
-	return PooledDataArray(map(x->get(D,convert(Uint32,x),0), pred(mod.dp, X)))
+immutable ModelLDA{T<:BlasReal}
+    W::Matrix{T}       # Whitening matrix
+    M::Matrix{T}       # Matrix of class means (one per row)
+    priors::Vector{T}  # Vector of class priors
 end
 
-function predict(mod::DaModel, df::AbstractDataFrame)
-	X = ModelMatrix(ModelFrame(mod.f, df)).m[:,2:]
-	return predict(mod, X)
+function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, γ::T)
+    k = maximum(y)
+    n_k = class_counts(y, k)
+    n, p = size(X)
+    H = center_classes!(X, M, y)
+    w_σ = one(T) ./ vec(sqrt(var(H, 1)))  # scaling constant vector
+    scale!(H, w_σ)
+    _U, D, Vᵀ = LAPACK.gesdd!('A', H)  # Sw = H'H/(n-1)
+    if γ > 0
+        μ_λ = mean(D.^2)
+        for i = 1:p
+            D[i] = (1-γ)*D[i] + γ*μ_λ
+        end
+    end
+    for i = 1:p
+        D[i] != 0 || error("Rank deficiency (collinearity) detected.")
+        D[i] = one(T)/D[i]
+    end
+    scale!(Vᵀ, D)
+    scale!(w_σ, transpose(Vᵀ))
 end
 
-function pred(dp::RdaPred{LinDiscr}, X::Matrix{Float64})
-	n,p = size(X)
-	ng = length(dp.logpr)
-	Zk = Array(Float64,n,p)
-	P = Array(Float64, n, ng)
-	for k=1:ng
-		Zk = (X .- dp.means[k,:]) * dp.discr.whiten
-		P[:,k] = mapslices(x -> -0.5*sum(x .^ 2), Zk, 2) .+ dp.logpr[k]
-	end
-	return mapslices(indmax,P,2)
+doc"""
+`lda(X, y; M, gamma, priors)`
+Fits a regularized linear discriminant model to the data in `X` based on class identifier `y`. 
+"""
+function lda{T<:BlasReal,U<:Integer}(
+        X::Matrix{T},
+        y::Vector{U};
+        M::Matrix{T} = class_means(X,y),
+        gamma::T = zero(T),
+        priors::Vector{T} = T[1/maximum(y) for i = 1:maximum(y)]
+    )
+    W = lda!(copy(X), M, y, gamma)
+    ModelLDA{T}(W, M, priors)
 end
-=#
+
+function cda!{T<:BlasReal,U<:Integer}(
+        X::Matrix{T}, 
+        M::Matrix{T}, 
+        y::Vector{U}, 
+        priors::Vector{T}, 
+        γ::T
+    )
+    k = length(priors)
+    W = lda!(X, M, y, γ)
+    μ = vec(priors'M)
+    H_mw = translate!(M, -μ) * W  # H_mw := (M .- μ') * W
+    _U, D, Vᵀ = LAPACK.gesdd!('A', H_mw)
+    W * transpose(Vᵀ[1:k-1,:])  #[end-k+1:end,:])
+end
+
+doc"""
+`cda(X, y; M, gamma, priors)`
+Fits a regularized canonical discriminant model to the data in `X` based on class identifier `y`. 
+"""
+function cda{T<:BlasReal,U<:Integer}(
+        X::Matrix{T},
+        y::Vector{U};
+        M::Matrix{T} = class_means(X,y),
+        gamma::T = zero(T),
+        priors::Vector{T} = T[1/maximum(y) for i = 1:maximum(y)]
+    )
+    W = cda!(copy(X), copy(M), y, priors, gamma)
+    ModelLDA{T}(W, M, priors)
+end
+
+function classify_lda{T<:BlasReal}(
+        W::Matrix{T},
+        M::Matrix{T},
+        priors::Vector{T},
+        Z::Matrix{T}
+    )
+    n, p = size(Z)
+    p == size(W, 1) || throw(DimensionMismatch("oops"))
+    d = size(W, 2)
+    k = length(priors)
+    δ = Array(T, n, k)  # discriminant function values
+    H = Array(T, n, p)  # temporary array to prevent re-allocation k times
+    Q = Array(T, n, d)  # Q := H*W
+    for j = 1:k
+        translate!(copy!(H, Z), -vec(M[j,:]))
+        s = dot_rows(BLAS.gemm!('N', 'N', one(T), H, W, zero(T), Q))
+        for i = 1:n
+            δ[i, j] = -s[i]/2 + log(priors[j])
+        end
+    end
+    mapslices(indmax, δ, 2)
+end
+
+classify{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T}) = classify_lda(mod.W, mod.M, mod.priors, Z)

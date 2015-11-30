@@ -86,7 +86,7 @@ for T in FloatingPointTypes
     end
 end
 
-info("Testing ", MOD.predict_qda)
+info("Testing ", MOD.classify_qda)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
     M_tmp = convert(Matrix{T}, M)
@@ -94,7 +94,7 @@ for T in FloatingPointTypes
         y_tmp = convert(Vector{U}, y)
         Model = MOD.qda(X_tmp, y_tmp, lambda = zero(T), gamma = zero(T))
         priors = convert(Vector{T}, [1/k for i = 1:k])
-        y_pred = MOD.predict_qda(Model.W_k, M_tmp, priors, X_tmp)
+        y_pred = MOD.classify_qda(Model.W_k, M_tmp, priors, X_tmp)
         @test all(y_tmp .== y_pred)
     end
 end

@@ -1,5 +1,5 @@
 #==========================================================================
-  Regularized Discriminant Analysis Solvers
+  Regularized Quadratic Discriminant Analysis Solver
 ==========================================================================#
 
 immutable ModelQDA{T<:BlasReal}
@@ -49,7 +49,7 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
     n_k = class_counts(y, k)
     n, p = size(X)
     H = center_classes!(X, M, y)
-    w_σ = one(T) ./ vec(sqrt(var(X, 1)))  # scaling constant vector
+    w_σ = one(T) ./ vec(sqrt(var(H, 1)))  # scaling constant vector
     scale!(H, w_σ)
     Σ_k = class_covariances(H, y, n_k)
     if λ > 0
@@ -67,11 +67,7 @@ end
 
 doc"""
 `qda(X, y; M, lambda, gamma, priors)`
-Fits a regularized quadratic discriminant analysis model to the data in `X` based on class 
-identifier `y`. `M` is an optional array of class centroids (one per row). M is the observed class
-means by default. `λ` is a regularization parameter between 0 and 1 that shrinks each class 
-covariance matrix towards the overall covariance matrix. `γ` regularizes each class matrix towards
-the average eigenvalue.
+Fits a regularized quadratic discriminant model to the data in `X` based on class identifier `y`.
 """
 function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
@@ -85,17 +81,17 @@ function qda{T<:BlasReal,U<:Integer}(
     ModelQDA{T}(W_k, M, priors)
 end
 
-function predict_qda{T<:BlasReal}(
+function classify_qda{T<:BlasReal}(
         W_k::Vector{Matrix{T}},
         M::Matrix{T},
         priors::Vector{T},
         Z::Matrix{T}
     )
     n, p = size(Z)
-    k = length(W_k)
+    k = length(priors)
     size(M,2) == p || throw(DimensionMismatch("Z does not have the same number of columns as M."))
     size(M,1) == k || error("class mismatch")
-    length(priors) == k || error("class mismatch")
+    length(W_k) == k || error("class mismatch")
     δ = Array(T, n, k)  # discriminant function values
     H = Array(T, n, p)  # temporary array to prevent re-allocation k times
     Q = Array(T, n, p)  # Q := H*W_k
@@ -110,7 +106,7 @@ function predict_qda{T<:BlasReal}(
 end
 
 doc"""
-`predict(Model, Z)`
+`classify(Model, Z)`
 Uses model on input Z.
 """
-predict{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T}) = predict_qda(mod.W_k, mod.M, mod.priors, Z)
+classify{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T}) = classify_qda(mod.W_k, mod.M, mod.priors, Z)

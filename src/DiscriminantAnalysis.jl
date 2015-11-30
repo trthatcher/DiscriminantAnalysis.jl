@@ -3,10 +3,13 @@ module DiscriminantAnalysis
     using Base.LinAlg.BlasReal
 
     export
+        lda,
+        cda,
         qda,
-        predict
+        classify
 
     include("common.jl")
+    include("lda.jl")
     include("qda.jl")
 
 end # module
