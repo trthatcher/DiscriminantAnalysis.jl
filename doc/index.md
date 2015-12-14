@@ -1,5 +1,10 @@
-Discriminant Analysis
-=====================
+# Discriminant Analysis
+
+
+[![Build Status](https://travis-ci.org/trthatcher/DiscriminantAnalysis.jl.svg?branch=master)](https://travis-ci.org/trthatcher/DiscriminantAnalysis.jl)
+[![Coverage Status](https://coveralls.io/repos/trthatcher/DiscriminantAnalysis.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/trthatcher/DiscriminantAnalysis.jl?branch=master)
+
+#### Summary
 
 **DiscriminantAnalysis.jl** is a Julia package for multiple linear and quadratic 
 regularized discriminant analysis (LDA & QDA respectively). LDA and QDA are
@@ -10,16 +15,11 @@ have the same variance whereas QDA allows each class to have its own covariance
 matrix. This results in LDA being a linear classifier and QDA being a quadratic
 classifier.
 
-
-.. toctree::
-   :maxdepth: 2
+#### Visualization
 
 
+#### Documentation
 
-Indices and tables
-==================
+## Getting Started ([example.jl](example/example.jl))
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
 
