@@ -1,6 +1,6 @@
 # Discriminant Analysis
 
-
+[![Documentation Status](https://readthedocs.org/projects/discriminantanalysis/badge/?version=latest)](http://discriminantanalysis.readthedocs.org/en/latest/?badge=latest)
 [![Build Status](https://travis-ci.org/trthatcher/DiscriminantAnalysis.jl.svg?branch=master)](https://travis-ci.org/trthatcher/DiscriminantAnalysis.jl)
 [![Coverage Status](https://coveralls.io/repos/trthatcher/DiscriminantAnalysis.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/trthatcher/DiscriminantAnalysis.jl?branch=master)
 
@@ -15,11 +15,15 @@ have the same variance whereas QDA allows each class to have its own covariance
 matrix. This results in LDA being a linear classifier and QDA being a quadratic
 classifier.
 
+#### Documentation
+
+Full [documentation](http://discriminantanalysis.readthedocs.org/en/latest/) is
+available on Read the Docs.
+
 #### Visualization
 
-
-#### Documentation
+WIP
 
 ## Getting Started ([example.jl](example/example.jl))
 
-
+WIP
