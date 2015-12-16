@@ -8,7 +8,7 @@ y = iris_df[:Species].refs  # Class indices
 
 using DiscriminantAnalysis
 
-model1 = qda(X, y, lambda = 0.3, gamma = 0.0, priors = [1/3; 1/3; 1/3])
+model1 = qda(X, y, lambda = 0.0, gamma = 0.0, priors = [1/3; 1/3; 1/3])
 
 y_pred1 = classify(model1, X)
 

@@ -38,8 +38,8 @@ Following rule can be used for classification:
 
 .. math::
 
-    \operatorname{arg\,max}_i\frac{f_k(\mathbf{x})\pi_k}{\sum_i f_i(\mathbf{x})\pi_i}
-    = \operatorname{arg\,max}_i f_k(\mathbf{x})\pi_k
+    \operatorname{arg\,max}_k\frac{f_k(\mathbf{x})\pi_k}{\sum_i f_i(\mathbf{x})\pi_i}
+    = \operatorname{arg\,max}_k f_k(\mathbf{x})\pi_k
 
 Applying the natural logarithm and dropping several constants, the discriminant
 functions :math:`\delta_k` may be defined as:
@@ -56,9 +56,16 @@ Linear Discriminant Analysis
 
 Linear Discriminant Analysis works under the additional assumption that
 :math:`\Sigma_k = \Sigma` for each class :math:`k`. In other words, the classes
-share a common within-class covariance matrix. This simplifies the discriminant
-function to:
+share a common within-class covariance matrix. Since
+:math:`\mathbf{x}^\intercal \Sigma \mathbf{x}` is now a constant, this 
+simplifies the discriminant function to a linear classifier:
 
+.. math::
+
+    \delta_k(x) =  
+    -\mathbf{\mu_k}^{\intercal}\Sigma^{-1}\mathbf{x} +
+    \frac{1}{2}\mathbf{\mu_k}\Sigma^{-1}\mathbf{\mu_k}
+    + \log(\pi_k)
 
 
 Canonical Discriminant Analysis

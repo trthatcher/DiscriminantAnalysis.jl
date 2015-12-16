@@ -26,7 +26,7 @@ function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
         D[i] != 0 || error("Rank deficiency (collinearity) detected.")
         D[i] = one(T)/D[i]
     end
-    scale!(Vᵀ, D)
+    scale!(D, Vᵀ)
     scale!(w_σ, transpose(Vᵀ))
 end
 
@@ -39,7 +39,7 @@ function lda{T<:BlasReal,U<:Integer}(
         y::Vector{U};
         M::Matrix{T} = class_means(X,y),
         gamma::T = zero(T),
-        priors::Vector{T} = T[1/maximum(y) for i = 1:maximum(y)]
+        priors::Vector{T} = ones(T,maximum(y))/maximum(y)
     )
     W = lda!(copy(X), M, y, gamma)
     ModelLDA{T}(W, M, priors)
