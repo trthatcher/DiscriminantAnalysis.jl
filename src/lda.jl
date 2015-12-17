@@ -15,18 +15,20 @@ function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
     H = center_classes!(X, M, y)
     w_σ = one(T) ./ vec(sqrt(var(H, 1)))  # scaling constant vector
     scale!(H, w_σ)
+    tol = eps(T) * prod(size(H)) * maximum(H)
     _U, D, Vᵀ = LAPACK.gesdd!('A', H)  # Sw = H'H/(n-1)
+    for i = 1:p
+        D[i] /= sqrt(n - one(T))
+    end
     if γ > 0
-        μ_λ = mean(D.^2)
+        Λ = D.^2
+        μ_λ = mean(Λ)
         for i = 1:p
-            D[i] = (1-γ)*D[i] + γ*μ_λ
+            D[i] = sqrt((1-γ)*Λ[i] + γ*μ_λ)
         end
     end
-    for i = 1:p
-        D[i] != 0 || error("Rank deficiency (collinearity) detected.")
-        D[i] = one(T)/D[i]
-    end
-    scale!(D, Vᵀ)
+    all(D .>= tol) || error("Rank deficiency (collinearity) detected.")
+    scale!(one(T) ./ D, Vᵀ)
     scale!(w_σ, transpose(Vᵀ))
 end
 

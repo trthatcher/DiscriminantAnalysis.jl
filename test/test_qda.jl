@@ -43,11 +43,11 @@ end
 
 info("Testing ", MOD.qda!)
 for T in FloatingPointTypes
-    X_tmp = copy(convert(Matrix{T}, X))
-    M_tmp = convert(Matrix{T}, M)
-    Xc_tmp = convert(Matrix{T}, Xc)
-    H_tmp = convert(Matrix{T}, H)
-    Σ_tmp = convert(Matrix{T}, Σ)
+    X_tmp   = copy(convert(Matrix{T}, X))
+    M_tmp   = convert(Matrix{T}, M)
+    Xc_tmp  = convert(Matrix{T}, Xc)
+    H_tmp   = convert(Matrix{T}, H)
+    Σ_tmp   = convert(Matrix{T}, Σ)
     Σ_k_tmp = convert(Vector{Matrix{T}}, Σ_k)
     σ = convert(Vector{T}, 1 ./ w_σ)
     for U in IntegerTypes
@@ -55,9 +55,9 @@ for T in FloatingPointTypes
         for λ in (zero(T), convert(T, 0.5), one(T)), γ in (zero(T), convert(T, 0.5), one(T))
             W_k_tmp = MOD.qda!(copy(X_tmp), M_tmp, y_tmp, λ, γ)
             for i = 1:k
-                S = (1-λ)*Σ_k_tmp[i] + λ*Σ_tmp                  # lambda-regularization first
-                S = (1-γ)*S + (γ/p)*trace(S)*I                  # gamma-regularization second
-                W = convert(Vector{T}, 1 ./ w_σ) .* W_k_tmp[i]  # Remove scaling transform
+                S = (1-λ)*Σ_k_tmp[i] + λ*Σ_tmp  # lambda-regularization first
+                S = (1-γ)*S + (γ/p)*trace(S)*I  # gamma-regularization second
+                W = σ .* W_k_tmp[i]             # Remove scaling transform
                 @test_approx_eq W'S*W diagm(ones(T,p))
                 if λ == 0 && γ == 0
                     U_k = H_tmp[y .== i,:] * W

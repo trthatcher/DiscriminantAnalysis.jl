@@ -1,3 +1,5 @@
+## Linear Discriminant Plots
+
 function hyperplane{T<:AbstractFloat}(Ω::Matrix{T}, M::Matrix{T}, priors::Vector{T}, i, j)
     μ_i = vec(M[i,:])
     μ_j = vec(M[j,:])
@@ -49,16 +51,25 @@ a_23, c_23 = hyperplane(Ω, M, π_k, 2, 3)
 
 err = vec(y .!= y_pred)
 
-plt_x1 = vec(X[:,1])[err]
-plt_x2 = vec(X[:,2])[err]
-plt_y = y[err]
+plt_x1 = vec(X[:,1])#[err]
+plt_x2 = vec(X[:,2])#[err]
+plt_y = y#[err]
+
+
+x2_max = maximum(plt_x2)
+x2_min = minimum(plt_x2)
+
+f(x2) = (δ_23(x2) > x2_max || δ_23(x2) < x2_min) ? NaN : δ_23(x2)
 
 plt = plot(layer(x=plt_x1, y=plt_x2, color=plt_y, Geom.point),
-           layer(δ_12, 0.0, 2.5),
-           layer(δ_13, 0.0, 2.5),
-           layer(δ_23, 0.0, 2.5))
+           layer(f, minimum(plt_x1), maximum(plt_x1), color=2),
+           #layer(δ_13, 0.0, 2.5),
+           #layer(δ_23, 0.0, 2.5),
+           Scale.color_discrete_manual(colorant"red",colorant"purple",colorant"blue"))#,
+           #Scale.x_continuous(minvalue=0.0, maxvalue=1.0),
+           #Scale.y_continuous(minvalue=0.0, maxvalue=1.0))
 
-draw(SVG("visualization_wrong.svg", 6inch, 6inch), plt)
+draw(SVG("visualization.svg", 6inch, 4inch), plt)
 
 #= 3d stuff
 
