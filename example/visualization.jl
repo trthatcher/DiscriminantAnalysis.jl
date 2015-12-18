@@ -26,41 +26,46 @@ iris_df = readtable("iris.csv")
 pool!(iris_df, [:Species])  # Ensure species is made a pooled data vector
 y = iris_df[:Species].refs  # Class indices
 
-using DiscriminantAnalysis
-MOD = DiscriminantAnalysis
-
-using Gadfly
+using PyPlot, DiscriminantAnalysis
+DA = DiscriminantAnalysis
 
 X = convert(Array{Float64}, iris_df[[:PetalWidth, :SepalWidth]])
+plt_x1 = vec(X[:,1])
+plt_x2 = vec(X[:,2])
+x2_max = maximum(plt_x2)
+x2_min = minimum(plt_x2)
 
-model = lda(X, y)
-y_pred = classify(model, X)
-
-M = MOD.class_means(X, y)
-H = MOD.center_classes!(copy(X), M, y)
+M = DA.class_means(X, y)
+H = DA.center_classes!(copy(X), M, y)
 Ω = inv(H'H/(size(X,1)-1))
 π_k = Float64[1/3; 1/3; 1/3]
 
 a_12, c_12 = hyperplane(Ω, M, π_k, 1, 2)
-a_13, c_13 = hyperplane(Ω, M, π_k, 1, 3)
 a_23, c_23 = hyperplane(Ω, M, π_k, 2, 3)
 
-δ_12(x1::AbstractFloat) = hyperplane_x2(a_12, c_12, x1)
-δ_13(x1::AbstractFloat) = hyperplane_x2(a_13, c_13, x1)
-δ_23(x1::AbstractFloat) = hyperplane_x2(a_23, c_23, x1)
+function δ_12{T<:AbstractFloat}(x1::T)
+    x2 = hyperplane_x2(a_12, c_12, x1)
+    (x2 > x2_max || x2 < x2_min) ? convert(T,NaN) : x2
+end
 
-err = vec(y .!= y_pred)
+function δ_23{T<:AbstractFloat}(x1::T)
+    x2 = hyperplane_x2(a_23, c_23, x1)
+    (x2 > x2_max || x2 < x2_min) ? convert(T,NaN) : x2
+end
 
-plt_x1 = vec(X[:,1])#[err]
-plt_x2 = vec(X[:,2])#[err]
-plt_y = y#[err]
+
+PyPlot.figure("Linear Discriminant Analysis")
+PyPlot.scatter(plt_x1[y .== 1], plt_x2[y .== 1], s=40*ones(plt_x1[y .== 1]), c="r")
+PyPlot.scatter(plt_x1[y .== 2], plt_x2[y .== 2], s=40*ones(plt_x1[y .== 2]), c="m")
+PyPlot.scatter(plt_x1[y .== 3], plt_x2[y .== 3], s=40*ones(plt_x1[y .== 3]), c="b")
+
+x = linspace(0,2.5,100); 
+y = Float64[δ_12(x) for x in x]
+plot(x, y, color="red", linewidth=2.0, linestyle="--")
 
 
-x2_max = maximum(plt_x2)
-x2_min = minimum(plt_x2)
-
-f(x2) = (δ_23(x2) > x2_max || δ_23(x2) < x2_min) ? NaN : δ_23(x2)
-
+#=
+using Gadfly
 plt = plot(layer(x=plt_x1, y=plt_x2, color=plt_y, Geom.point),
            layer(f, minimum(plt_x1), maximum(plt_x1), color=2),
            #layer(δ_13, 0.0, 2.5),
@@ -70,44 +75,4 @@ plt = plot(layer(x=plt_x1, y=plt_x2, color=plt_y, Geom.point),
            #Scale.y_continuous(minvalue=0.0, maxvalue=1.0))
 
 draw(SVG("visualization.svg", 6inch, 4inch), plt)
-
-#= 3d stuff
-
-X = convert(Array{Float64}, iris_df[[:PetalWidth, :PetalLength, :SepalWidth]])
-y = iris_df[:Species].refs  # Class indices
-
-using DiscriminantAnalysis, PyPlot
-
-MOD = DiscriminantAnalysis
-
-PyPlot.figure("Iris Data")
-
-#xlim(0.0,1.0)
-#ylim(0.0,1.0)
-#zlim(0.0,1.0)
-
-for (k, colour) in ((1,"r"), (2,"m"), (3,"b"))
-    class = y .== k
-    PyPlot.scatter3D(vec(X[class,1]), vec(X[class,2]), vec(X[class,3]), c=colour, clip_on=true)
-end
-
-model = lda(X, y)
-
-M = MOD.class_means(X, y)
-H = MOD.center_classes!(X, M, y)
-Σinv = inv(H'H/(size(X,1)-1))
-
-function hyperplane3D(Σinv, μ_i, μ_j, x1, x2)  # aᵀx + c = 0
-    a = (μ_j - μ_i)'Σinv
-    c = (μ_i'Σinv*μ_i - μ_j'Σinv*μ_j)[1]/2
-    x3 = -(a[1]*x1 + a[2]*x2 + c)/a[3]
-end
-
-
-x1 = Float64[0 4; 0 4]
-x2 = Float64[8 8; 0 0]
-x3 = reshape(Float64[hyperplane(Σinv, vec(M[2,:]), vec(M[3,:]), x1[i], x2[i]) for i = 1:length(x1)], 2, 2)
-
-PyPlot.plot_surface(x1, x2, x3, 
-                     rstride=1, cstride=1, alpha=0.25, clip_on = true)
 =#
