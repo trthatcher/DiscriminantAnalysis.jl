@@ -51,15 +51,19 @@ for T in FloatingPointTypes
     end
 end
 
+
 info("Testing ", MOD.classify_lda)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
     M_tmp = convert(Matrix{T}, M)
+    priors = convert(Vector{T}, [1/k for i = 1:k])
     for U in IntegerTypes
         y_tmp = convert(Vector{U}, y)
-        Model = MOD.lda(X_tmp, y_tmp, gamma = zero(T))
-        priors = convert(Vector{T}, [1/k for i = 1:k])
-        y_pred = MOD.classify_lda(Model.W, Model.M, priors, X_tmp)
-        @test all(y_tmp .== y_pred)
+        Model1 = MOD.lda(X_tmp, y_tmp, gamma = zero(T))
+        Model2 = MOD.cda(X_tmp, y_tmp, gamma = zero(T))
+        @test all(y_tmp .== MOD.classify_lda(Model1.W, Model1.M, priors, X_tmp))
+        @test all(y_tmp .== MOD.classify_lda(Model2.W, Model2.M, priors, X_tmp))
+        @test all(y_tmp .== classify(Model1, X_tmp))
+        @test all(y_tmp .== classify(Model2, X_tmp))
     end
 end

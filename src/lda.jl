@@ -70,8 +70,8 @@ function cda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
         M::Matrix{T} = class_means(X,y),
-        gamma::T = zero(T),
-        priors::Vector{T} = T[1/maximum(y) for i = 1:maximum(y)]
+        priors::Vector{T} = ones(T, maximum(y))/maximum(y),
+        gamma::T = zero(T)
     )
     W = cda!(copy(X), copy(M), y, priors, gamma)
     ModelLDA{T}(W, M, priors)
