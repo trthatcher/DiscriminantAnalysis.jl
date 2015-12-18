@@ -78,7 +78,7 @@ for T in FloatingPointTypes
         y_tmp = convert(Vector{U}, y)
         for λ in (zero(T), convert(T, 0.5), one(T)), γ in (zero(T), convert(T, 0.5), one(T))
             W_k_tmp = MOD.qda!(copy(X_tmp), M_tmp, y_tmp, λ, γ)
-            Model = MOD.qda(copy(X_tmp), y_tmp; lambda = λ, gamma = γ)
+            Model = MOD.qda(copy(X_tmp), y_tmp, lambda = λ, gamma = γ)
             for i = 1:k
                 @test_approx_eq W_k_tmp[i] Model.W_k[i]
             end
@@ -94,7 +94,7 @@ for T in FloatingPointTypes
         y_tmp = convert(Vector{U}, y)
         Model = MOD.qda(X_tmp, y_tmp, lambda = zero(T), gamma = zero(T))
         priors = convert(Vector{T}, [1/k for i = 1:k])
-        y_pred = MOD.classify_qda(Model.W_k, M_tmp, priors, X_tmp)
+        y_pred = MOD.classify_qda(Model.W_k, Model.M, priors, X_tmp)
         @test all(y_tmp .== y_pred)
     end
 end

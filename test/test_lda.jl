@@ -36,3 +36,30 @@ for T in FloatingPointTypes
         end
     end
 end
+
+info("Testing ", MOD.lda)
+for T in FloatingPointTypes
+    X_tmp = copy(convert(Matrix{T}, X))
+    M_tmp = convert(Matrix{T}, M)
+    for U in IntegerTypes
+        y_tmp = convert(Vector{U}, y)
+        for γ in (zero(T), convert(T, 0.5), one(T))
+            W_tmp = MOD.lda!(copy(X_tmp), M_tmp, y_tmp, γ)
+            Model = MOD.lda(copy(X_tmp), y_tmp, gamma = γ)
+            @test_approx_eq W_tmp Model.W
+        end
+    end
+end
+
+info("Testing ", MOD.classify_lda)
+for T in FloatingPointTypes
+    X_tmp = copy(convert(Matrix{T}, X))
+    M_tmp = convert(Matrix{T}, M)
+    for U in IntegerTypes
+        y_tmp = convert(Vector{U}, y)
+        Model = MOD.lda(X_tmp, y_tmp, gamma = zero(T))
+        priors = convert(Vector{T}, [1/k for i = 1:k])
+        y_pred = MOD.classify_lda(Model.W, Model.M, priors, X_tmp)
+        @test all(y_tmp .== y_pred)
+    end
+end
