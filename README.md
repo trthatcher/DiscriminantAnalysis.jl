@@ -22,7 +22,16 @@ available on Read the Docs.
 
 #### Visualization
 
-WIP
+When the data is modelled via linear discriminant analysis, the resulting
+classification boundaries are hyperplanes (lines in two dimensions):
+
+<p align="center"><img alt="Original Data" src="doc/visualization/linear_discriminant_analysis.png"  /></p>
+
+Using quadratic discriminant analysis, the resulting classification boundaries
+are quadratics:
+
+<p align="center"><img alt="Original Data" src="doc/visualization/quadratic_discriminant_analysis.png"  /></p>
+
 
 ## Getting Started ([example.jl](example/example.jl))
 

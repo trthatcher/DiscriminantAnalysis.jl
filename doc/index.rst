@@ -10,9 +10,6 @@ have the same variance whereas QDA allows each class to have its own covariance
 matrix. This results in LDA being a linear classifier and QDA being a quadratic
 classifier.
 
-.. toctree::
-   :maxdepth: 2
-
 .. _DiscriminantAnalysis.jl: https://github.com/trthatcher/DiscriminantAnalysis.jl
 
 Classification
@@ -40,16 +37,10 @@ Following rule can be used for classification:
 
     \operatorname{arg\,max}_k\frac{f_k(\mathbf{x})\pi_k}{\sum_i f_i(\mathbf{x})\pi_i}
     = \operatorname{arg\,max}_k f_k(\mathbf{x})\pi_k
+    = \operatorname{arg\,max}_k log(f_k(\mathbf{x})) + log(\pi_k)
 
-Applying the natural logarithm and dropping several constants, the discriminant
-functions :math:`\delta_k` may be defined as:
-
-.. math::
-
-    \delta_k(x) =  
-    -\frac{1}{2}(\mathbf{x}-\mathbf{\mu_k})^{\intercal}\Sigma_k^{-1}(\mathbf{x}-\mathbf{\mu_k})
-    -\frac{1}{2}\log\left(\left|\Sigma_k\right|\right) 
-    + \log(\pi_k)
+Applying the natural logarithm helps to simplify the classification rule when
+working with a Gaussian distribution.
 
 Linear Discriminant Analysis
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -67,9 +58,34 @@ simplifies the discriminant function to a linear classifier:
     \frac{1}{2}\mathbf{\mu_k}\Sigma^{-1}\mathbf{\mu_k}
     + \log(\pi_k)
 
+The following plot shows the linear classification boundaries that result when
+the iris data set is modelled using linear discriminant analysis on two
+variables:
+
+.. image:: visualization/linear_discriminant_analysis.png
 
 Canonical Discriminant Analysis
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Quadratic Discriminant Analysis
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Quadratic Discriminant Analysis does not make the simplifying assumption that
+each class shares the same covariance matrix. This results in a quadratic
+classifier:
+
+.. math::
+
+    \delta_k(x) =  
+    -\frac{1}{2}(\mathbf{x}-\mathbf{\mu_k})^{\intercal}\Sigma_k^{-1}(\mathbf{x}-\mathbf{\mu_k})
+    -\frac{1}{2}\log\left(\left|\Sigma_k\right|\right) 
+    + \log(\pi_k)
+
+The following plot shows the quadratic classification boundaries that result 
+when the iris data set is modelled using linear discriminant analysis on two
+variables:
+
+.. image:: visualization/quadratic_discriminant_analysis.png
+
+Note that quadratic discriminant analysis does not necessarily perform better
+than linear discriminant analysis. 
