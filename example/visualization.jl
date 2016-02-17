@@ -105,6 +105,35 @@ PyPlot.text(1.8, 2.1, "Virginica", fontsize=20)
 
 
 #==========================================================================
+  Canonical Discriminant - Visualization
+==========================================================================#
+
+X = convert(Array{Float64}, iris_df[[:PetalWidth, :SepalLength, :SepalWidth]])
+plt_x1 = vec(X[:,1])
+plt_x2 = vec(X[:,2])
+plt_x3 = vec(X[:,3])
+
+PyPlot.figure("Iris Scatter Plot", figsize=(8,6.5))
+
+PyPlot.scatter3D(plt_x1[y .== 1], plt_x2[y .== 1], plt_x3[y .== 1], s=40*ones(plt_x1[y .== 1]), c="r")
+PyPlot.scatter3D(plt_x1[y .== 2], plt_x2[y .== 2], plt_x3[y .== 2], s=40*ones(plt_x1[y .== 2]), c="m")
+PyPlot.scatter3D(plt_x1[y .== 3], plt_x2[y .== 3], plt_x3[y .== 3], s=40*ones(plt_x1[y .== 3]), c="b")
+
+Model = cda(X, y)
+
+U = X * Model.W
+
+plt_u1 = vec(U[:,1])
+plt_u2 = vec(U[:,2])
+
+PyPlot.figure("Canonical Discriminant Analysis", figsize=(8,5))
+
+PyPlot.scatter(plt_u1[y .== 1], plt_u2[y .== 1], s=40*ones(plt_x1[y .== 1]), c="r", zorder=3)
+PyPlot.scatter(plt_u1[y .== 2], plt_u2[y .== 2], s=40*ones(plt_x1[y .== 2]), c="m", zorder=4)
+PyPlot.scatter(plt_u1[y .== 3], plt_u2[y .== 3], s=40*ones(plt_x1[y .== 3]), c="b", zorder=5)
+
+
+#==========================================================================
   Quadratic Discriminant - Visualization
 ==========================================================================#
 

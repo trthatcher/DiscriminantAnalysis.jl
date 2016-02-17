@@ -10,10 +10,12 @@ have the same variance whereas QDA allows each class to have its own covariance
 matrix. This results in LDA being a linear classifier and QDA being a quadratic
 classifier.
 
+.. contents::
+
 .. _DiscriminantAnalysis.jl: https://github.com/trthatcher/DiscriminantAnalysis.jl
 
-Classification
---------------
+Classification Rules
+--------------------
 
 Linear and Quadratic Discriminant Analysis in the context of classification 
 arise as simple probabilistic classifiers. Discriminant Analysis works under the
@@ -43,9 +45,9 @@ Applying the natural logarithm helps to simplify the classification rule when
 working with a Gaussian distribution.
 
 Linear Discriminant Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------
 
-Linear Discriminant Analysis works under the additional assumption that
+Linear Discriminant Analysis works under the simplifying assumption that
 :math:`\Sigma_k = \Sigma` for each class :math:`k`. In other words, the classes
 share a common within-class covariance matrix. Since
 :math:`\mathbf{x}^\intercal \Sigma \mathbf{x}` is now a constant, this 
@@ -64,15 +66,13 @@ variables:
 
 .. image:: visualization/linear_discriminant_analysis.png
 
-Canonical Discriminant Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Quadratic Discriminant Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Quadratic Discriminant Analysis (QDA)
+-------------------------------------
 
 Quadratic Discriminant Analysis does not make the simplifying assumption that
 each class shares the same covariance matrix. This results in a quadratic
-classifier:
+classifier in :math:`mathbf{x}`:
 
 .. math::
 
@@ -89,3 +89,17 @@ variables:
 
 Note that quadratic discriminant analysis does not necessarily perform better
 than linear discriminant analysis. 
+
+
+Canonical Discriminant Analysis (CDA)
+-------------------------------------
+
+Canonical discriminant analysis expands upon linear discriminant analysis by
+noting that the class centroids lie in a subspace of dimension :math:'k-1'.
+
+Using LDA to do QDA
+-------------------
+
+
+Computational Considerations
+----------------------------

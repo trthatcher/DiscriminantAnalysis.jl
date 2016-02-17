@@ -8,23 +8,28 @@ immutable ModelLDA{T<:BlasReal}
     priors::Vector{T}  # Vector of class priors
 end
 
+# Fit regularized quadratic discriminant model. Returns whitening matrix for class variance.
+#   X in uncentered data matrix
+#   M is matrix of class means (one per row)
+#   y is one-based vector of class IDs
+#   λ is regularization parameter in [0,1]. λ = 0 is no regularization. See documentation.
 function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, γ::T)
-    k = maximum(y)
-    n_k = class_counts(y, k)
+    k    = maximum(y)
+    n_k  = class_counts(y, k)
     n, p = size(X)
-    H = center_classes!(X, M, y)
-    w_σ = one(T) ./ vec(sqrt(var(H, 1)))  # scaling constant vector
+    H    = center_classes!(X, M, y)
+    w_σ  = 1 ./ vec(sqrt(var(H, 1)))  # Variance normalizing factor for columns of H
     scale!(H, w_σ)
     tol = eps(T) * prod(size(H)) * maximum(H)
-    _U, D, Vᵀ = LAPACK.gesdd!('A', H)  # Sw = H'H/(n-1)
-    for i = 1:p
-        D[i] /= sqrt(n - one(T))
+    _U, D, Vᵀ = LAPACK.gesdd!('A', H)  # Recall: Sw = H'H/(n-1) = VD²Vᵀ
+    @inbounds for i = 1:p
+        D[i] /= sqrt(n - one(T))  # Note: we did not divide by n-1 above, so we do it now.
     end
     if γ > 0
-        Λ = D.^2
-        μ_λ = mean(Λ)
+        Λ = D.^2         # Since Sw = VD²Vᵀ, we have:
+        λ_avg = mean(Λ)  #   (1-γ)Sw + γ(λ_avg)I = V((1-γ)D² + γ(λ_avg)I)Vᵀ
         for i = 1:p
-            D[i] = sqrt((1-γ)*Λ[i] + γ*μ_λ)
+            D[i] = sqrt((1-γ)*Λ[i] + γ*λ_avg)
         end
     end
     all(D .>= tol) || error("Rank deficiency (collinearity) detected.")
@@ -32,10 +37,8 @@ function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
     scale!(w_σ, transpose(Vᵀ))
 end
 
-doc"""
-`lda(X, y; M, gamma, priors)`
-Fits a regularized linear discriminant model to the data in `X` based on class identifier `y`. 
-"""
+doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model to the data in `X` 
+based on class identifier `y`."
 function lda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
@@ -59,13 +62,11 @@ function cda!{T<:BlasReal,U<:Integer}(
     μ = vec(priors'M)
     H_mw = translate!(M, -μ) * W  # H_mw := (M .- μ') * W
     _U, D, Vᵀ = LAPACK.gesdd!('A', H_mw)
-    W * transpose(Vᵀ[1:k-1,:])  #[end-k+1:end,:])
+    W * transpose(Vᵀ[1:k-1,:])
 end
 
-doc"""
-`cda(X, y; M, gamma, priors)`
-Fits a regularized canonical discriminant model to the data in `X` based on class identifier `y`. 
-"""
+doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant model to the data in
+`X` based on class identifier `y`."
 function cda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};

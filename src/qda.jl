@@ -15,8 +15,8 @@ function class_covariances{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::Vector{U},
                                                    n_k::Vector{Int64} = class_counts(y))
     k = length(n_k)
     p = size(H,2)
-    Σ_k = Array(Array{T,2}, k)
-    for i = 1:k  # Σ_k[i] = H_i'H_i/(n_i-1)
+    Σ_k = Array(Array{T,2}, k)  # Σ_k[i] = H_i'H_i/(n_i-1)
+    for i = 1:k
         Σ_k[i] = BLAS.syrk!('U', 'T', one(T)/(n_k[i]-1), H[y .== i,:], zero(T), Array(T,p,p))
         symml!(Σ_k[i])
     end
@@ -25,15 +25,15 @@ end
 
 # Use eigendecomposition to generate class whitening transform
 #   Σ_k is array of references to each Σ_i covariance matrix
-#   λ is regularization parameter in [0,1]
+#   λ is regularization parameter in [0,1]. λ = 0 is no regularization.
 function class_whiteners!{T<:BlasReal}(Σ_k::Vector{Matrix{T}}, γ::T)
     for i = 1:length(Σ_k)
         tol = eps(T) * prod(size(Σ_k[i])) * maximum(Σ_k[i])
         Λ_i, V_i = LAPACK.syev!('V', 'U', Σ_k[i])  # Overwrite Σ_k with V such that VΛVᵀ = Σ_k
         if γ > 0
-            μ_λ = mean(Λ_i)  # Shrink towards average eigenvalue
+            λ_avg = mean(Λ_i)  # Shrink towards average eigenvalue
             for j = 1:length(Λ_i)
-                Λ_i[j] = (1-γ)*Λ_i[j] + γ*μ_λ  # Σ = VΛVᵀ => (1-γ)Σ + γI = V((1-γ)Λ + γI)Vᵀ
+                Λ_i[j] = (1-γ)*Λ_i[j] + γ*λ_avg  # Σ = VΛVᵀ => (1-γ)Σ + γI = V((1-γ)Λ + γI)Vᵀ
             end
         end
         all(Λ_i .>= tol) || error("Rank deficiency detected in class $i with tolerance $tol.")
@@ -42,18 +42,20 @@ function class_whiteners!{T<:BlasReal}(Σ_k::Vector{Matrix{T}}, γ::T)
     Σ_k
 end
 
-# Fit regularized discriminant model
+# Fit regularized quadratic discriminant model. Returns whitening matrices for all classes.
 #   X in uncentered data matrix
 #   M is matrix of class means (one per row)
 #   y is one-based vector of class IDs
+#   λ is regularization parameter in [0,1]. λ = 0 is no regularization. See documentation.
+#   γ is shrinkage parameter in [0,1]. γ = 0 is no shrinkage. See documentation.
 function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, λ::T, γ::T)
-    k = maximum(y)
-    n_k = class_counts(y, k)
+    k    = maximum(y)
+    n_k  = class_counts(y, k)
     n, p = size(X)
-    H = center_classes!(X, M, y)
-    w_σ = one(T) ./ vec(sqrt(var(H, 1)))  # scaling constant vector
+    H    = center_classes!(X, M, y)
+    w_σ  = 1 ./ vec(sqrt(var(H, 1)))  # Variance normalizing factor for columns of H
     scale!(H, w_σ)
-    Σ_k = class_covariances(H, y, n_k)
+    Σ_k  = class_covariances(H, y, n_k)
     if λ > 0
         Σ = scale!(H'H, one(T)/(n-1))
         for i = 1:k 
@@ -67,10 +69,8 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
     W_k
 end
 
-doc"""
-`qda(X, y; M, lambda, gamma, priors)`
-Fits a regularized quadratic discriminant model to the data in `X` based on class identifier `y`.
-"""
+doc"`qda(X, y; M, lambda, gamma, priors)` Fits a regularized quadratic discriminant model to the 
+data in `X` based on class identifier `y`."
 function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
@@ -107,8 +107,5 @@ function classify_qda{T<:BlasReal}(
     mapslices(indmax, δ, 2)
 end
 
-doc"""
-`classify(Model, Z)`
-Uses model on input Z.
-"""
+doc"`classify(Model, Z)` Uses `Model` on input `Z`."
 classify{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T}) = classify_qda(mod.W_k, mod.M, mod.priors, Z)
