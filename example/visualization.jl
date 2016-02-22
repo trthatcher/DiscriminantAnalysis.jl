@@ -158,12 +158,12 @@ x_min = 0.0; x_max = 2.6; y_min = 1.85; y_max = 4.6;
 PyPlot.ylim([y_min, y_max])
 PyPlot.xlim([x_min, x_max])
 
-function δ_12{T<:AbstractFloat}(x::T)
+function δ_12{T<:AbstractFloat}(x1::T)
     y = quadratic_x2(Q_12, v_12, u_12, x)
     y#(y > y_max || y < y_min) ? convert(T,NaN) : y
 end
 
-function δ_23{T<:AbstractFloat}(x::T)
+function δ_23{T<:AbstractFloat}(x1::T)
     y = quadratic_x2(Q_23, v_23, u_23, x)
     y#(y > y_max || y < y_min) ? convert(T,NaN) : y
 end

@@ -6,7 +6,7 @@ regularized discriminant analysis (LDA & QDA respectively). LDA and QDA are
 distribution-based classifiers that make the (strong) assumption that the 
 underlying data follows a multivariate normal distribution. LDA is distinct from
 QDA in the assumption about the class variability; LDA assumes that all classes 
-have the same variance whereas QDA allows each class to have its own covariance
+have the same variance whereas QDA assumes each class has a unique covariance
 matrix. This results in LDA being a linear classifier and QDA being a quadratic
 classifier.
 
@@ -14,8 +14,8 @@ classifier.
 
 .. _DiscriminantAnalysis.jl: https://github.com/trthatcher/DiscriminantAnalysis.jl
 
-Classification Rules
---------------------
+Classification Rule
+-------------------
 
 Linear and Quadratic Discriminant Analysis in the context of classification 
 arise as simple probabilistic classifiers. Discriminant Analysis works under the
@@ -33,16 +33,23 @@ Application of Baye's Theorem results in:
 
     P(K = k | X = \mathbf{x}) = \frac{f_k(\mathbf{x})\pi_k}{\sum_i f_i(\mathbf{x})\pi_i}
 
-Following rule can be used for classification:
+Noting that probabilities are non-zero and the natural logarithm is
+monotonically increasing, the following rule can be used for classification:
 
 .. math::
 
     \operatorname{arg\,max}_k\frac{f_k(\mathbf{x})\pi_k}{\sum_i f_i(\mathbf{x})\pi_i}
-    = \operatorname{arg\,max}_k f_k(\mathbf{x})\pi_k
     = \operatorname{arg\,max}_k log(f_k(\mathbf{x})) + log(\pi_k)
 
-Applying the natural logarithm helps to simplify the classification rule when
-working with a Gaussian distribution.
+Application of the natural logarithm helps to simplify the classification rule 
+when working with a Gaussian distribution. The resulting set of functions
+:math:`\delta_k` are known as **discriminant functions**. In the context of LDA
+and QDA, discriminant functions are of the form:
+
+.. math::
+
+    \delta_k(\mathbf{x}) = log(f_k(\mathbf{x})) + log(\pi_k)
+
 
 Linear Discriminant Analysis
 ----------------------------
@@ -50,8 +57,8 @@ Linear Discriminant Analysis
 Linear Discriminant Analysis works under the simplifying assumption that
 :math:`\Sigma_k = \Sigma` for each class :math:`k`. In other words, the classes
 share a common within-class covariance matrix. Since
-:math:`\mathbf{x}^\intercal \Sigma \mathbf{x}` is now a constant, this 
-simplifies the discriminant function to a linear classifier:
+:math:`\mathbf{x}^\intercal \Sigma \mathbf{x}` term is constant across classes, 
+this simplifies the discriminant function to a linear classifier:
 
 .. math::
 
@@ -95,7 +102,8 @@ Canonical Discriminant Analysis (CDA)
 -------------------------------------
 
 Canonical discriminant analysis expands upon linear discriminant analysis by
-noting that the class centroids lie in a subspace of dimension :math:'k-1'.
+noting that the class centroids lie in a :math:`k-1` dimensional subspace of the
+:math:`p` dimensions of the data.
 
 Using LDA to do QDA
 -------------------
