@@ -71,7 +71,7 @@ The following plot shows the linear classification boundaries that result when
 the iris data set is modelled using linear discriminant analysis on two
 variables:
 
-.. image:: visualization/linear_discriminant_analysis.png
+.. image:: visualization/lda.png
 
 
 Quadratic Discriminant Analysis (QDA)
@@ -92,7 +92,7 @@ The following plot shows the quadratic classification boundaries that result
 when the iris data set is modelled using linear discriminant analysis on two
 variables:
 
-.. image:: visualization/quadratic_discriminant_analysis.png
+.. image:: visualization/qda.png
 
 Note that quadratic discriminant analysis does not necessarily perform better
 than linear discriminant analysis. 

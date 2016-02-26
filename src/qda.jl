@@ -83,7 +83,7 @@ function qda{T<:BlasReal,U<:Integer}(
     ModelQDA{T}(W_k, M, priors)
 end
 
-function classify_qda{T<:BlasReal}(
+function discriminants_qda{T<:BlasReal}(
         W_k::Vector{Matrix{T}},
         M::Matrix{T},
         priors::Vector{T},
@@ -104,8 +104,16 @@ function classify_qda{T<:BlasReal}(
             δ[i, j] = -s[i]/2 + log(priors[j])
         end
     end
-    mapslices(indmax, δ, 2)
+    δ
+   
+end
+
+doc"`discriminants(Model, Z)` Uses `Model` on input `Z` to product the class discriminants."
+function discriminants{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T})
+    discriminants_qda(mod.W_k, mod.M, mod.priors, Z)
 end
 
 doc"`classify(Model, Z)` Uses `Model` on input `Z`."
-classify{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T}) = classify_qda(mod.W_k, mod.M, mod.priors, Z)
+function classify{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T})
+    mapslices(indmax, discriminants(mod, Z), 2)
+end

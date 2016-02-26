@@ -78,7 +78,7 @@ function cda{T<:BlasReal,U<:Integer}(
     ModelLDA{T}(W, M, priors)
 end
 
-function classify_lda{T<:BlasReal}(
+function discriminants_lda{T<:BlasReal}(
         W::Matrix{T},
         M::Matrix{T},
         priors::Vector{T},
@@ -98,7 +98,13 @@ function classify_lda{T<:BlasReal}(
             δ[i, j] = -s[i]/2 + log(priors[j])
         end
     end
-    mapslices(indmax, δ, 2)
+    δ
 end
 
-classify{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T}) = classify_lda(mod.W, mod.M, mod.priors, Z)
+function discriminants{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
+    discriminants_lda(mod.W, mod.M, mod.priors, Z)
+end
+
+function classify{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
+    mapslices(indmax, discriminants(mod, Z), 2)
+end
