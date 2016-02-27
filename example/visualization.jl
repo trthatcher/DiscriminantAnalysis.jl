@@ -1,5 +1,6 @@
 using DiscriminantAnalysis, Gadfly
 
+
 ### Helper functions ###
 
 function rotationmatrix2D{T<:AbstractFloat}(θ::T)
@@ -13,10 +14,10 @@ function boxmuller(n::Integer)  # Generates two normally distributed variables
     Z = Float64[(√(-2log(u1)) .* cos(2π*u2)) (√(-2log(u1)) .* sin(2π*u2))]
 end
 
-function boundary(model, xrange, yrange)  # Create the decision boundary 
+function boundary(model, xrange, yrange, is_quad::Bool = false)  # Create the decision boundary using Contour.jl 
     Z = hcat(vec(Float64[x for x in xrange, y in yrange]), 
              vec(Float64[y for x in xrange, y in yrange]))
-    δ = DiscriminantAnalysis.discriminants(model, Z)
+    δ = DiscriminantAnalysis.discriminants(model, is_quad ? hcat(Z, Z.^2, Z[:,1] .* Z[:,2]) : Z)
     Z = reshape(δ[:,1] - δ[:,2], length(xrange), length(yrange))
     Contour.coordinates(Contour.contours(xrange, yrange, Z, 0.0)[1].lines[1])
 end
@@ -39,24 +40,22 @@ y = repeat([1,2], inner=[n])
 
 xmin = minimum(X[:,1])
 xmax = maximum(X[:,1])
-
 ymin = minimum(X[:,2])
 ymax = maximum(X[:,2])
-
 aspect = (ymax-ymin)/(xmax-xmin)
 
-m = 150  # Used for interpolating the decision boundary
+m = 250  # Used for interpolating the decision boundary
 xrange = linspace(xmin,xmax,m)
 yrange = linspace(ymin,ymax,m)
 
 
-### Plots ###
-
-for (obj, desc) in ((:lda, "Linear Discriminant Analysis"), 
-                    (:qda, "Quadratic Discriminant Analyisis"))
+### LDA & QDA Plots ###
+for (obj, desc, is_quad) in ((:lda, "Linear Discriminant Analysis", false), 
+                             (:qda, "Quadratic Discriminant Analyisis", false),
+                             (:lda, "Quadratic Linear Discriminant Analysis", true))
     @eval begin
-        model = ($obj)(X, y)
-        cx, cy = boundary(model, xrange, yrange)
+        model = ($obj)($is_quad ? hcat(X, X.^2, X[:,1] .* X[:,2]) : X, y)
+        cx, cy = boundary(model, xrange, yrange, $is_quad)
 
         P = plot(
                 x = vec(X[:,1]), 
@@ -74,6 +73,32 @@ for (obj, desc) in ((:lda, "Linear Discriminant Analysis"),
                   Theme(default_color=colorant"black", line_width=.4mm))
         unshift!(P.layers,L[1])
 
-        draw(PNG($(string(obj)) * ".png", 6inch, (6*aspect)inch), P)
+        draw(PNG(($is_quad ? "q" : "") * $(string(obj)) * ".png", 6inch, (6*aspect)inch), P)
     end
 end
+
+
+### CDA Plot ###
+
+model = cda(X, y)
+C = vec(X * model.W)
+
+P = plot(
+    x = C, 
+    color = map(class -> "Class $class", y), 
+    Geom.histogram(bincount=100),
+    Scale.color_discrete_manual(colorant"red",colorant"blue"),
+    Guide.XLabel("Canonical Coordinate"),
+    Guide.YLabel("Count"),
+    Guide.title("Canonical Discriminant Analysis"),
+    Guide.colorkey(""),
+    Coord.Cartesian(xmin=minimum(C), xmax=maximum(C))
+)
+
+draw(PNG("cda.png", 6inch, 4inch), P)
+
+
+### Using LDA to do QDA ###
+
+#model = lda(hcat(X, X.^2), y)
+

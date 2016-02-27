@@ -6,6 +6,7 @@ module DiscriminantAnalysis
         lda,
         cda,
         qda,
+        discriminants,
         classify
 
     include("common.jl")
