@@ -1,7 +1,7 @@
-Discriminant Analysis
-=====================
+Introduction
+============
 
-`DiscriminantAnalysis.jl`_ is a Julia package for multiple linear and quadratic 
+**DiscriminantAnalysis.jl** is a Julia package for multiple linear and quadratic 
 regularized discriminant analysis (LDA & QDA respectively). LDA and QDA are
 distribution-based classifiers that make the (strong) assumption that the 
 underlying data follows a multivariate normal distribution. LDA is distinct from
@@ -12,10 +12,19 @@ classifier.
 
 .. contents::
 
+Installation
+============
+
+The source code is available on Github:
+
+  * `DiscriminantAnalysis.jl`_
+
 .. _DiscriminantAnalysis.jl: https://github.com/trthatcher/DiscriminantAnalysis.jl
 
-Classification Rule
--------------------
+To add the package from Julia:
+
+Theory
+======
 
 Linear and Quadratic Discriminant Analysis in the context of classification 
 arise as simple probabilistic classifiers. Discriminant Analysis works under the
@@ -51,8 +60,8 @@ and QDA, discriminant functions are of the form:
     \delta_k(\mathbf{x}) = log(f_k(\mathbf{x})) + log(\pi_k)
 
 
-Linear Discriminant Analysis
-----------------------------
+Linear Discriminant Analysis (LDA)
+----------------------------------
 
 Linear Discriminant Analysis works under the simplifying assumption that
 :math:`\Sigma_k = \Sigma` for each class :math:`k`. In other words, the classes
@@ -83,7 +92,7 @@ classifier in :math:`\mathbf{x}`:
 
 .. math::
 
-    \delta_k(x) =  
+    \delta_k(\mathbf{x}) =  
     -\frac{1}{2}(\mathbf{x}-\mathbf{\mu_k})^{\intercal}\Sigma_k^{-1}(\mathbf{x}-\mathbf{\mu_k})
     -\frac{1}{2}\log\left(\left|\Sigma_k\right|\right) 
     + \log(\pi_k)
@@ -145,9 +154,48 @@ in a quadratic decision boundary:
 Note that this boundary does not correspond to the same boundary produced by
 QDA.
 
-Computational Considerations
-----------------------------
+Calculation Method
+------------------
+
+As a result of floating point arithmetic, full inversion of a matrix may
+introduce numerical error. Even inversion of a small matrix may produce
+relatively large error (see `Hilbert matrices`_), so alternative methods are 
+used to ensure numerical stability.
+
+For each class covariance matrix in QDA (or the overall covariance matrix in
+LDA), a whitening matrix :math:`\mathbf{W}_k` is computed such that:
+
+.. math::
+
+    \operatorname{V}(\mathbf{X}_k \mathbf{W}_k) 
+    = \mathbf{W}_k^{\intercal} \operatorname{V}(\mathbf{X}_k) \mathbf{W}_k
+    = \mathbf{W}_k^{\intercal} \mathbf{\Sigma}_k \mathbf{W}_k
+    = I \quad \implies \quad \mathbf{W} = \mathbf{\Sigma}^{-1/2}
+
+This is accomplished using an eigendecomposition of the covariance matrix or a
+singular value decomposition of the data matrix. We can then use the 
+transformation:
+
+.. math::
+
+    \mathbf{z}_k = \mathbf{W}_k^{\intercal}\mathbf{x}
+    \quad \implies \quad \mathbf{Z}_k = \mathbf{X}\mathbf{W}_k
+
+Since we are now working in the transformed space, the determinant goes to zero
+and the inverse is simply the identity matrix. This results in the simplified
+discriminant function:
+
+.. math::
+
+    \delta_k(\mathbf{z_k}) =  
+    -\frac{1}{2}(\mathbf{z_k}-\mathbf{\mu_k})^{\intercal}(\mathbf{z_k}-\mathbf{\mu_k})
+    + \log(\pi_k)
+
+.. _Hilbert matrices: https://en.wikipedia.org/wiki/Hilbert_matrix
+
+Package Interface
+=================
 
 
-Interface
----------
+Citations
+=========

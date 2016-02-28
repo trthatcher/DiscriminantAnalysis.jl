@@ -1,4 +1,4 @@
-using DiscriminantAnalysis, Gadfly
+using DiscriminantAnalysis, Gadfly, Colors
 
 
 ### Helper functions ###
@@ -22,6 +22,8 @@ function boundary(model, xrange, yrange, is_quad::Bool = false)  # Create the de
     Contour.coordinates(Contour.contours(xrange, yrange, Z, 0.0)[1].lines[1])
 end
 
+limits(X::Matrix) = (minimum(X[:,1]), maximum(X[:,1]), minimum(X[:,2]), maximum(X[:,2]))
+
 
 ### Sample Data ###
 
@@ -38,10 +40,7 @@ X2 = ((Z2 .* σ2) .+ [0.0 2.25]) * rotationmatrix2D(π/4)
 X = vcat(X1,X2)
 y = repeat([1,2], inner=[n])
 
-xmin = minimum(X[:,1])
-xmax = maximum(X[:,1])
-ymin = minimum(X[:,2])
-ymax = maximum(X[:,2])
+xmin, xmax, ymin, ymax = limits(X)
 aspect = (ymax-ymin)/(xmax-xmin)
 
 m = 250  # Used for interpolating the decision boundary
@@ -96,9 +95,3 @@ P = plot(
 )
 
 draw(PNG("cda.png", 6inch, 4inch), P)
-
-
-### Using LDA to do QDA ###
-
-#model = lda(hcat(X, X.^2), y)
-
