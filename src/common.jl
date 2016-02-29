@@ -53,6 +53,14 @@ function regularize!{T<:AbstractFloat}(S::Matrix{T}, λ::T, s::Vector{T})
     S
 end
 
+function regularize!{T<:AbstractFloat}(Λ::Vector{T}, γ::T)
+    0 <= γ <= 1 || error("γ = $(γ) must be in the interval [0,1]")
+    λ_avg = mean(Λ)
+    @inbounds for i in eachindex(Λ)
+        Λ[i] = (1-γ)*Λ[j] + γ*λ_avg
+    end
+    Λ
+end
 
 # Symmetrize the lower half of matrix S using the upper half of S
 function symml!(S::Matrix)
@@ -116,9 +124,47 @@ end
 #   X is uncentered data matrix
 #   M is matrix of class means (one per row)
 function center_classes!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U})
-    n, p = size(X)
-    for j = 1:p, i = 1:n
-        X[i,j] -= M[y[i],j]
+    @inbounds for ij in CartesianRange(size(X))
+        X[ij] -= M[y[ij.I[1]],ij.I[2]]
     end
     X
+end
+
+# Compute the symmetric matrix
+function covariancematrix{T<:BlasReal}(H::Matrix{T}, α::T, symmetrize::Bool=true)
+    Σ = BLAS.syrk!('U', 'T', α, H, zero(T), Array(T,p,p))
+    symmetrize ? symml!(Σ) : Σ
+end
+
+
+# Uses a singular value decomposition to whiten a centered matrix H
+# Regularization parameter γ shrinks towards average eigenvalue
+function whiten_data!{T<:BlasReal}(H::Matrix{T}, γ::Nullable{T})
+    n = size(H,1)
+    ϵ = eps(T) * prod(size(H)) * maximum(H)
+    _U, D, Vᵀ = LAPACK.gesdd!('A', H)  # Recall: Sw = H'H/(n-1) = VD²Vᵀ
+    if !isnull(γ)
+        Λ = regularize!(D^2/(n-1), get(γ))
+        @inbounds for i in eachindex(D)
+            D[i] = sqrt(Λ[i])
+        end
+    else
+        @inbounds for i in eachindex(D)
+            D[i] /= sqrt(n-1)
+        end
+    end
+    all(D .>= ϵ) || error("Rank deficiency (collinearity) detected with tolerance $(ϵ).")
+    transpose(scale!(1 ./ D, Vᵀ))
+end
+
+# Uses an eigendecomposition to whiten a covariance matrix
+# Regularization parameter γ shrinks towards average eigenvalue
+function whiten_cov!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
+    ϵ = eps(T) * prod(size(Σ)) * maximum(Σ)
+    Λ, V = LAPACK.syev!('V', 'U', Σ)
+    if !isnull(λ)
+        regularize!(Λ, get(λ))
+    end
+    all(Λ .>= ϵ) || error("Rank deficiency (collinearity) detected with tolerance $(ϵ).")
+    scale!(V, 1 ./ sqrt(Λ))
 end

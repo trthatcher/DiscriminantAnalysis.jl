@@ -8,12 +8,12 @@
 
 **DiscriminantAnalysis.jl** is a Julia package for multiple linear and quadratic 
 regularized discriminant analysis (LDA & QDA respectively). LDA and QDA are
-distribution-based classifiers that make the (strong) assumption that the 
-underlying data follows a multivariate normal distribution. LDA is distinct from
-QDA in the assumption about the class variability; LDA assumes that all classes 
-have the same variance whereas QDA allows each class to have its own covariance
-matrix. This results in LDA being a linear classifier and QDA being a quadratic
-classifier.
+distribution-based classifiers with the underlying assumption that data follows
+a multivariate normal distribution. LDA differs from QDA in the assumption about 
+the class variability; LDA assumes that all classes share the same within-class 
+covariance matrix whereas QDA relaxes that constraint and allows for distinct 
+within-class covariance matrices. This results in LDA being a linear classifier
+and QDA being a quadratic classifier.
 
 #### Documentation
 

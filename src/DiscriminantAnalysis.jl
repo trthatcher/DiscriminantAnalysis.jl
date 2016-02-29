@@ -1,6 +1,6 @@
 module DiscriminantAnalysis
 
-    using Base.LinAlg.BlasReal
+    import Base: LinAlg.BlasReal, show
 
     export
         lda,

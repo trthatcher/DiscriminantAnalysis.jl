@@ -9,11 +9,11 @@ y = iris_df[:Species].refs  # Class indices
 
 # Fitting the discriminant models to the data
 
-model1 = qda(X, y, lambda = 0.0, gamma = 0.0, priors = [1/3; 1/3; 1/3])
+model1 = lda(X, y, gamma = 0.0, priors = [1/3; 1/3; 1/3])
 y_pred1 = classify(model1, X)
 accuracy1 = sum(y_pred1 .== y)/length(y)
 
-model2 = lda(X, y, gamma = 0.0, priors = [1/3; 1/3; 1/3])
+model2 = qda(X, y, lambda = 0.0, gamma = 0.0, priors = [1/3; 1/3; 1/3])
 y_pred2 = classify(model2, X)
 accuracy2 = sum(y_pred2 .== y)/length(y)
 

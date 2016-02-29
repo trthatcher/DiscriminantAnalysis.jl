@@ -3,38 +3,42 @@
 ==========================================================================#
 
 immutable ModelLDA{T<:BlasReal}
+    is_cda::Bool
     W::Matrix{T}       # Whitening matrix
     M::Matrix{T}       # Matrix of class means (one per row)
     priors::Vector{T}  # Vector of class priors
+    gamma::Nullable{T}
 end
 
-# Fit regularized quadratic discriminant model. Returns whitening matrix for class variance.
+function show(io::IO, model::ModelLDA)
+    println(io, (model.is_cda ? "Canonical" : "Linear") * " Discriminant Analysis:")
+    println(io, "  Regularization parameter γ: " * isnull(model.gamma) ? "n/a" : string(get(model.gamma)))
+end
+
+
 #   X in uncentered data matrix
 #   M is matrix of class means (one per row)
 #   y is one-based vector of class IDs
-#   λ is regularization parameter in [0,1]. λ = 0 is no regularization. See documentation.
-function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, γ::T)
-    k    = maximum(y)
-    n_k  = class_counts(y, k)
-    n, p = size(X)
-    H    = center_classes!(X, M, y)
-    w_σ  = 1 ./ vec(sqrt(var(H, 1)))  # Variance normalizing factor for columns of H
-    scale!(H, w_σ)
-    tol = eps(T) * prod(size(H)) * maximum(H)
-    _U, D, Vᵀ = LAPACK.gesdd!('A', H)  # Recall: Sw = H'H/(n-1) = VD²Vᵀ
-    @inbounds for i = 1:p
-        D[i] /= sqrt(n - one(T))  # Note: we did not divide by n-1 above, so we do it now.
-    end
-    if γ > 0
-        Λ = D.^2         # Since Sw = VD²Vᵀ, we have:
-        λ_avg = mean(Λ)  #   (1-γ)Sw + γ(λ_avg)I = V((1-γ)D² + γ(λ_avg)I)Vᵀ
-        for i = 1:p
-            D[i] = sqrt((1-γ)*Λ[i] + γ*λ_avg)
-        end
-    end
-    all(D .>= tol) || error("Rank deficiency (collinearity) detected.")
-    scale!(one(T) ./ D, Vᵀ)
-    scale!(w_σ, transpose(Vᵀ))
+#   λ is nullable regularization parameter in [0,1]
+function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, γ::Nullable{T})
+    H = center_classes!(X, M, y)
+    W = whiten_data!(H, γ)
+end
+
+function cda!{T<:BlasReal,U<:Integer}(
+        X::Matrix{T}, 
+        M::Matrix{T}, 
+        y::Vector{U}, 
+        γ::Nullable{T},
+        priors::Vector{T}
+    )
+    p = size(X,2)
+    k = length(priors)
+    W_lda = lda!(X, M, y, γ)
+    μ = vec(priors'M)
+    H_mW = translate!(M, -μ) * W_lda
+    _U, D, Vᵀ  = LAPACK.gesdd!('A', H_mW)
+    W = W_lda * transpose(Vᵀ[1:min(k-1,p),:])
 end
 
 doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model to the data in `X` 
@@ -46,23 +50,9 @@ function lda{T<:BlasReal,U<:Integer}(
         gamma::T = zero(T),
         priors::Vector{T} = ones(T,maximum(y))/maximum(y)
     )
-    W = lda!(copy(X), M, y, gamma)
-    ModelLDA{T}(W, M, priors)
-end
-
-function cda!{T<:BlasReal,U<:Integer}(
-        X::Matrix{T}, 
-        M::Matrix{T}, 
-        y::Vector{U}, 
-        priors::Vector{T}, 
-        γ::T
-    )
-    k = length(priors)
-    W = lda!(X, M, y, γ)
-    μ = vec(priors'M)
-    H_mw = translate!(M, -μ) * W  # H_mw := (M .- μ') * W
-    _U, D, Vᵀ = LAPACK.gesdd!('A', H_mw)
-    W * transpose(Vᵀ[1:k-1,:])
+    γ = gamma == 0 ? Nullable{T}() : Nullable(gamma)
+    W = lda!(copy(X), M, y, γ)
+    ModelLDA{T}(false, W, M, priors, γ)
 end
 
 doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant model to the data in
@@ -74,8 +64,9 @@ function cda{T<:BlasReal,U<:Integer}(
         priors::Vector{T} = ones(T, maximum(y))/maximum(y),
         gamma::T = zero(T)
     )
-    W = cda!(copy(X), copy(M), y, priors, gamma)
-    ModelLDA{T}(W, M, priors)
+    γ = gamma == 0 ? Nullable{T}() : Nullable(gamma)
+    W = cda!(copy(X), copy(M), y, γ, priors)
+    ModelLDA{T}(false, W, M, priors, γ)
 end
 
 function discriminants_lda{T<:BlasReal}(
