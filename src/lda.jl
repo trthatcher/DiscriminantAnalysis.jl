@@ -11,8 +11,15 @@ immutable ModelLDA{T<:BlasReal}
 end
 
 function show(io::IO, model::ModelLDA)
-    println(io, (model.is_cda ? "Canonical" : "Linear") * " Discriminant Analysis:")
-    println(io, "  Regularization parameter γ: " * isnull(model.gamma) ? "n/a" : string(get(model.gamma)))
+    println(io, (model.is_cda ? "Canonical" : "Linear") * " Discriminant Analysis")
+    println(io, "\nRegularization Parameters:")
+    println("γ = ", isnull(model.gamma) ? "n/a" : string(get(model.gamma)))
+    println("\nPrior Probabilities:")
+    for i in eachindex(model.priors)
+        println("Class ", i, ": ", model.priors[i])
+    end
+    println("\nGroup Means (one per row):")
+    println(model.M)
 end
 
 
@@ -66,7 +73,7 @@ function cda{T<:BlasReal,U<:Integer}(
     )
     γ = gamma == 0 ? Nullable{T}() : Nullable(gamma)
     W = cda!(copy(X), copy(M), y, γ, priors)
-    ModelLDA{T}(false, W, M, priors, γ)
+    ModelLDA{T}(true, W, M, priors, γ)
 end
 
 function discriminants_lda{T<:BlasReal}(
