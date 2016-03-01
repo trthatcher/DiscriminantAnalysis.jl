@@ -2,6 +2,19 @@
   Common Methods
 ==========================================================================#
 
+# Helper type to
+immutable RefVector{T<:Integer}
+    y::Vector{T}
+    k::T
+    function RefVector(y::Vector{T}, k::T)
+        (ymin = minimum(y)) >  0 || error("Class reference should begin at 1; value $ymin found")
+        (ymax = maximum(y)) <= k || error("Class reference should not exceed $k; value $ymax found")
+        length(unique(y)) == k || error("A class between 1 and $k is not referenced.")
+        new(y, k)
+    end
+end
+RefVector{T<:Integer}(y::Vector{T}, k::T = maximum(y)) = RefVector{T}(y, k)
+
 # Element-wise translate
 function translate!{T<:AbstractFloat}(A::Array{T}, b::T)
     @inbounds for i = 1:length(A)
@@ -57,7 +70,7 @@ function regularize!{T<:AbstractFloat}(Λ::Vector{T}, γ::T)
     0 <= γ <= 1 || error("γ = $(γ) must be in the interval [0,1]")
     λ_avg = mean(Λ)
     @inbounds for i in eachindex(Λ)
-        Λ[i] = (1-γ)*Λ[j] + γ*λ_avg
+        Λ[i] = (1-γ)*Λ[i] + γ*λ_avg
     end
     Λ
 end
@@ -114,7 +127,7 @@ end
 # Compute matrix of class means
 #   X is uncentered data matrix
 #   y is one-based vector of class IDs
-function class_means{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k = maximum(y))
+function class_means{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k::U = maximum(y))
     M = class_totals(X, y, k)
     n_k = class_counts(y, k)
     scale!(one(T) ./ n_k, M)
@@ -131,7 +144,8 @@ function center_classes!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}
 end
 
 # Compute the symmetric matrix
-function covariancematrix{T<:BlasReal}(H::Matrix{T}, α::T, symmetrize::Bool=true)
+function gramian{T<:BlasReal}(H::Matrix{T}, α::T, symmetrize::Bool=true)
+    p = size(H,2)
     Σ = BLAS.syrk!('U', 'T', α, H, zero(T), Array(T,p,p))
     symmetrize ? symml!(Σ) : Σ
 end
@@ -144,7 +158,7 @@ function whiten_data!{T<:BlasReal}(H::Matrix{T}, γ::Nullable{T})
     ϵ = eps(T) * prod(size(H)) * maximum(H)
     _U, D, Vᵀ = LAPACK.gesdd!('A', H)  # Recall: Sw = H'H/(n-1) = VD²Vᵀ
     if !isnull(γ)
-        Λ = regularize!(D^2/(n-1), get(γ))
+        Λ = regularize!(D.^2/(n-1), get(γ))
         @inbounds for i in eachindex(D)
             D[i] = sqrt(Λ[i])
         end
@@ -162,8 +176,8 @@ end
 function whiten_cov!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
     ϵ = eps(T) * prod(size(Σ)) * maximum(Σ)
     Λ, V = LAPACK.syev!('V', 'U', Σ)
-    if !isnull(λ)
-        regularize!(Λ, get(λ))
+    if !isnull(γ)
+        regularize!(Λ, get(γ))
     end
     all(Λ .>= ϵ) || error("Rank deficiency (collinearity) detected with tolerance $(ϵ).")
     scale!(V, 1 ./ sqrt(Λ))

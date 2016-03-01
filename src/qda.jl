@@ -8,13 +8,40 @@ immutable ModelQDA{T<:BlasReal}
     priors::Vector{T}        # Vector of class priors
 end
 
+function class_whiteners!{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::Vector{U}, k::Integer, γ::Nullable{T}, λ::T)
+    f_k = one(T)/(class_counts(y, k) .- 1)
+    Σ_k = Array{T,2}[gramian(H[y .== i,:], f_k[i], false) for i = 1:k]
+    Σ   = gramian(H, one(T)/(size(H,1)-1))
+    for i = 1:k 
+        regularize!(Σ_k[i], λ, Σ)
+        whiten_cov!(Σ_k[i], γ)
+    end
+    Σ_k
+end
+
+function class_whiteners!{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::Vector{U}, k::Integer, γ::Nullable{T})
+    Array{T,2}[whiten_data!(H[y .== i,:], γ) for i = 1:k]
+end
+
+function qda!{T<:BlasReal,U<:Integer}(
+        X::Matrix{T}, 
+        M::Matrix{T}, 
+        y::Vector{U}, 
+        λ::Nullable{T}, 
+        γ::Nullable{T}
+    )
+    k = maximum(y)
+    H = center_classes!(X, M, y)
+    isnull(λ) ? class_whiteners!(H, y, k, γ, get(λ)) : class_whiteners!(H, y, k, γ)
+end
+
 # Create an array of class scatter matrices
 #   H is centered data matrix (with respect to class means)
 #   y is one-based vector of class IDs
+#=
 function class_covariances{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::Vector{U}, 
                                                    n_k::Vector{Int64} = class_counts(y))
     k = length(n_k)
-    p = size(H,2)
     Σ_k = Array(Array{T,2}, k)  # Σ_k[i] = H_i'H_i/(n_i-1)
     for i = 1:k
         Σ_k[i] = BLAS.syrk!('U', 'T', one(T)/(n_k[i]-1), H[y .== i,:], zero(T), Array(T,p,p))
@@ -22,10 +49,15 @@ function class_covariances{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::Vector{U},
     end
     Σ_k
 end
+=#
+
+
+
 
 # Use eigendecomposition to generate class whitening transform
 #   Σ_k is array of references to each Σ_i covariance matrix
 #   λ is regularization parameter in [0,1]. λ = 0 is no regularization.
+#=
 function class_whiteners!{T<:BlasReal}(Σ_k::Vector{Matrix{T}}, γ::T)
     for i = 1:length(Σ_k)
         tol = eps(T) * prod(size(Σ_k[i])) * maximum(Σ_k[i])
@@ -41,6 +73,7 @@ function class_whiteners!{T<:BlasReal}(Σ_k::Vector{Matrix{T}}, γ::T)
     end
     Σ_k
 end
+=#
 
 # Fit regularized quadratic discriminant model. Returns whitening matrices for all classes.
 #   X in uncentered data matrix
@@ -48,6 +81,7 @@ end
 #   y is one-based vector of class IDs
 #   λ is regularization parameter in [0,1]. λ = 0 is no regularization. See documentation.
 #   γ is shrinkage parameter in [0,1]. γ = 0 is no shrinkage. See documentation.
+#=
 function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, λ::T, γ::T)
     k    = maximum(y)
     n_k  = class_counts(y, k)
@@ -68,6 +102,7 @@ function qda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, 
     end
     W_k
 end
+=#
 
 doc"`qda(X, y; M, lambda, gamma, priors)` Fits a regularized quadratic discriminant model to the 
 data in `X` based on class identifier `y`."
@@ -75,11 +110,13 @@ function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
         M::Matrix{T} = class_means(X,y),
-        lambda::T = zero(T),
-        gamma::T = zero(T),
+        gamma::Union{T,Nullable{T}} = zero(T),
+        lambda::Union{T,Nullable{T}} = zero(T),
         priors::Vector{T} = T[1/maximum(y) for i = 1:maximum(y)]
     )
-    W_k = qda!(copy(X), M, y, lambda, gamma)
+    γ = isa(gamma, Nullable)  ? gamma  : Nullable(gamma)
+    λ = isa(lambda, Nullable) ? lambda : Nullable(lambda)
+    W_k = qda!(copy(X), M, y, λ, γ)
     ModelQDA{T}(W_k, M, priors)
 end
 

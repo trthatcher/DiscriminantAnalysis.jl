@@ -54,10 +54,10 @@ function lda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
         M::Matrix{T} = class_means(X,y),
-        gamma::T = zero(T),
+        gamma::Union{T,Nullable{T}} = Nullable{T}(),
         priors::Vector{T} = ones(T,maximum(y))/maximum(y)
     )
-    γ = gamma == 0 ? Nullable{T}() : Nullable(gamma)
+    γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
     W = lda!(copy(X), M, y, γ)
     ModelLDA{T}(false, W, M, priors, γ)
 end
