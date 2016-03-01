@@ -54,7 +54,19 @@ function regularize!{T<:AbstractFloat}(S1::Matrix{T}, λ::T, S2::Matrix{T})
     S1
 end
 
+# if S = UΛUᵀ then Λ := (1-γ)Λ .+ γ*λ_avg  => S := (1-γ)S + γ*λ_avg
+function regularize!{T<:AbstractFloat}(Λ::Vector{T}, γ::T)
+    0 <= γ <= 1 || error("γ = $(γ) must be in the interval [0,1]")
+    λ_avg = mean(Λ)
+    @inbounds for i in eachindex(Λ)
+        Λ[i] = (1-γ)*Λ[i] + γ*λ_avg
+    end
+    Λ
+end
+
+
 # S1 := (1-λ)S1+ λ*diagm(s2)
+#=
 function regularize!{T<:AbstractFloat}(S::Matrix{T}, λ::T, s::Vector{T})
     (n = size(S,1)) == size(S,2) || throw(DimensionMismatch("Matrix S must be square."))
     n == length(s) || throw(DimensionMismatch("The length vector s must be the order of S."))
@@ -65,15 +77,8 @@ function regularize!{T<:AbstractFloat}(S::Matrix{T}, λ::T, s::Vector{T})
     end
     S
 end
+=#
 
-function regularize!{T<:AbstractFloat}(Λ::Vector{T}, γ::T)
-    0 <= γ <= 1 || error("γ = $(γ) must be in the interval [0,1]")
-    λ_avg = mean(Λ)
-    @inbounds for i in eachindex(Λ)
-        Λ[i] = (1-γ)*Λ[i] + γ*λ_avg
-    end
-    Λ
-end
 
 # Symmetrize the lower half of matrix S using the upper half of S
 function symml!(S::Matrix)
@@ -86,6 +91,7 @@ end
 symml(S::Matrix) = symml!(copy(S))
 
 # sum(X .* X, 2)
+#=
 function dot_columns{T<:AbstractFloat}(X::Matrix{T})
     n, p = size(X)
     xᵀx = zeros(p)
@@ -94,6 +100,7 @@ function dot_columns{T<:AbstractFloat}(X::Matrix{T})
     end
     xᵀx
 end
+=#
 
 # sum(X .* X, 1)
 function dot_rows{T<:AbstractFloat}(X::Matrix{T})

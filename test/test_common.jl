@@ -27,9 +27,9 @@ for T in FloatingPointTypes
            8 3 6;
            1 7 4]
 
-    s2 = T[5;
-           7;
-           9]
+    s = T[5;
+          7;
+          9]
 
     B = T[1 2;
           3 4;
@@ -47,14 +47,19 @@ for T in FloatingPointTypes
 
     @test_throws DimensionMismatch MOD.regularize!(S1, one(T), B)
 
-    @test_approx_eq MOD.regularize!(copy(S1), zero(T), s2)  S1
-    @test_approx_eq MOD.regularize!(copy(S1), one(T),  s2)  diagm(s2)
-    @test_approx_eq MOD.regularize!(copy(S1), one(T)/2, s2) (1-one(T)/2)*S1 + (one(T)/2)*diagm(s2)
+    @test_approx_eq MOD.regularize!(copy(s), zero(T))  s
+    @test_approx_eq MOD.regularize!(copy(s), one(T))   zero(s) .+ mean(s)
+    @test_approx_eq MOD.regularize!(copy(s), one(T)/2) (1-one(T)/2)*s .+ (one(T)/2)*mean(s)
 
-    @test_throws ErrorException MOD.regularize!(copy(S1), -one(T),  s2)
-    @test_throws ErrorException MOD.regularize!(copy(S1), 2*one(T), s2)
 
-    @test_throws DimensionMismatch MOD.regularize!(S1, one(T), b)
+    #@test_approx_eq MOD.regularize!(copy(S1), zero(T), s2)  S1
+    #@test_approx_eq MOD.regularize!(copy(S1), one(T),  s2)  diagm(s2)
+    #@test_approx_eq MOD.regularize!(copy(S1), one(T)/2, s2) (1-one(T)/2)*S1 + (one(T)/2)*diagm(s2)
+
+    #@test_throws ErrorException MOD.regularize!(copy(S1), -one(T),  s2)
+    #@test_throws ErrorException MOD.regularize!(copy(S1), 2*one(T), s2)
+
+    #@test_throws DimensionMismatch MOD.regularize!(S1, one(T), b)
 end
 
 info("Testing ", MOD.symml)
@@ -85,6 +90,17 @@ for T in FloatingPointTypes
     @test_approx_eq MOD.dot_rows(A) sum(A .* A,2)
 end
 
+info("Testing ", MOD.gramian)
+for T in FloatingPointTypes
+    A  = T[1 2 3;
+           4 5 6;
+           7 8 9;
+           5 3 2]
+    Ac = A .- mean(A,1)
+    @test_approx_eq MOD.gramian(Ac, one(T)/(size(A,1)-1)) cov(A)
+end
+
+#=
 info("Testing ", MOD.dot_columns)
 for T in FloatingPointTypes
     A  = T[1 2 3;
@@ -94,7 +110,7 @@ for T in FloatingPointTypes
 
     @test_approx_eq MOD.dot_columns(A) sum(A .* A,1)
 end
-
+=#
 
 # Class Functions
 
