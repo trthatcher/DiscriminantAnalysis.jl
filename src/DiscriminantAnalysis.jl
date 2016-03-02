@@ -1,6 +1,14 @@
 module DiscriminantAnalysis
 
-    import Base: LinAlg.BlasReal, show
+    import Base: 
+        LinAlg.BlasReal, 
+        show,
+        AbstractArray,
+        size,
+        linearindexing,
+        getindex, 
+        length, 
+        convert
 
     export
         lda,

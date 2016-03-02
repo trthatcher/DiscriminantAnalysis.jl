@@ -1,3 +1,62 @@
+info("Testing ", MOD.RefVector)
+for T in IntegerTypes
+    ref = T[1; 1; 2; 3; 3]
+    k = convert(T, 3)
+    y = MOD.RefVector(ref,k)
+
+    @test all(y.ref .== ref)
+    @test y.k == k
+
+    @test_throws ErrorException MOD.RefVector(ref[ref .!= 2], k)
+    @test_throws ErrorException MOD.RefVector(ref[ref .!= 2], k + one(T))
+    @test_throws ErrorException MOD.RefVector(ref[ref .!= 2], k - one(T))
+end
+
+# Class Functions
+
+n_k = [4; 7; 5]
+k = length(n_k)
+p = 4
+y = MOD.RefVector(vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...), k)
+X = vcat([rand(n_k[i], p) .+ (10rand(1,p) .- 5) for i = 1:k]...)
+σ = sortperm(rand(sum(n_k)))
+y = MOD.RefVector(y[σ])
+X = X[σ,:]
+
+info("Testing ", MOD.class_counts)
+for U in IntegerTypes
+    @test all(n_k .== MOD.class_counts(convert(MOD.RefVector{U}, y)))
+end
+
+info("Testing ", MOD.class_totals)
+for T in FloatingPointTypes
+    for U in IntegerTypes
+        X_tmp = convert(Array{T}, X)
+        y_tmp = convert(MOD.RefVector{U}, y)
+        @test_approx_eq MOD.class_totals(X_tmp, y_tmp) vcat([sum(X_tmp[y.ref .== i,:],1) for i = 1:k]...)
+    end
+end
+
+info("Testing ", MOD.class_means)
+for T in FloatingPointTypes
+    for U in IntegerTypes
+        X_tmp = convert(Array{T}, X)
+        y_tmp = convert(MOD.RefVector{U}, y)        
+        @test_approx_eq MOD.class_means(X_tmp, y_tmp) (MOD.class_totals(X_tmp, y_tmp) ./ n_k)
+    end
+end
+
+info("Testing ", MOD.center_classes!)
+for T in FloatingPointTypes
+    for U in IntegerTypes
+        X_tmp = copy(convert(Array{T}, X))
+        y_tmp = convert(MOD.RefVector{U}, y)
+        M = MOD.class_means(X_tmp, y_tmp)
+        @test_approx_eq MOD.center_classes!(copy(X_tmp), M, y_tmp) (X_tmp .- M[y_tmp, :])
+    end
+end
+
+
 info("Testing ", MOD.translate!)
 for T in FloatingPointTypes
     A = T[1 2;
@@ -112,46 +171,4 @@ for T in FloatingPointTypes
 end
 =#
 
-# Class Functions
 
-n_k = [4; 7; 5]
-k = length(n_k)
-p = 4
-y = vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...)
-X = vcat([rand(n_k[i], p) .+ (10rand(1,p) .- 5) for i = 1:k]...)
-σ = sortperm(rand(sum(n_k)))
-y = y[σ]
-X = X[σ,:]
-
-info("Testing ", MOD.class_counts)
-for U in IntegerTypes
-    @test all(n_k .== MOD.class_counts(convert(Array{U}, y)))
-end
-
-info("Testing ", MOD.class_totals)
-for T in FloatingPointTypes
-    for U in IntegerTypes
-        X_tmp = convert(Array{T}, X)
-        y_tmp = convert(Array{U}, y)
-        @test_approx_eq MOD.class_totals(X_tmp, y_tmp) vcat([sum(X_tmp[y .== i,:],1) for i = 1:k]...)
-    end
-end
-
-info("Testing ", MOD.class_means)
-for T in FloatingPointTypes
-    for U in IntegerTypes
-        X_tmp = convert(Array{T}, X)
-        y_tmp = convert(Array{U}, y)        
-        @test_approx_eq MOD.class_means(X_tmp, y_tmp) (MOD.class_totals(X_tmp, y_tmp) ./ n_k)
-    end
-end
-
-info("Testing ", MOD.center_classes!)
-for T in FloatingPointTypes
-    for U in IntegerTypes
-        X_tmp = copy(convert(Array{T}, X))
-        y_tmp = copy(convert(Array{U}, y))
-        M = MOD.class_means(X_tmp, y_tmp)
-        @test_approx_eq MOD.center_classes!(copy(X_tmp), M, y_tmp) (X_tmp .- M[y_tmp, :])
-    end
-end

@@ -2,18 +2,68 @@
   Common Methods
 ==========================================================================#
 
-# Helper type to
-immutable RefVector{T<:Integer}
-    y::Vector{T}
+# Helper type for references
+immutable RefVector{T<:Integer} <: AbstractVector{T}
+    ref::Vector{T}
     k::T
-    function RefVector(y::Vector{T}, k::T)
-        (ymin = minimum(y)) >  0 || error("Class reference should begin at 1; value $ymin found")
-        (ymax = maximum(y)) <= k || error("Class reference should not exceed $k; value $ymax found")
-        length(unique(y)) == k || error("A class between 1 and $k is not referenced.")
-        new(y, k)
+    function RefVector(ref::Vector{T}, k::T, check_integrity::Bool = true)
+        if check_integrity
+            (refmin = minimum(ref)) >  0 || error("Class reference should begin at 1; value $refmin found")
+            (refmax = maximum(ref)) <= k || error("Class reference should not exceed $k; value $refmax found")
+            length(unique(ref)) == k || error("A class between 1 and $k is not referenced.")
+        end
+        new(ref, k)
     end
 end
-RefVector{T<:Integer}(y::Vector{T}, k::T = maximum(y)) = RefVector{T}(y, k)
+function RefVector{T<:Integer}(y::Vector{T}, k::T = maximum(y), check_integrity::Bool = true)
+    RefVector{T}(y, k, check_integrity)
+end
+
+Base.size(y::RefVector) = (length(y.ref),)
+Base.linearindexing(::Type{RefVector}) = Base.LinearFast()
+Base.getindex(y::RefVector, i::Int) = getindex(y.ref, i)
+
+function convert{U<:Integer}(::Type{RefVector{U}}, y::RefVector)
+    RefVector(copy(convert(Vector{U}, y.ref)), convert(U, y.k), false)
+end
+
+function class_counts{T<:Integer}(y::RefVector{T})
+    counts = zeros(Int64, y.k)
+    @inbounds for i in eachindex(y)
+        counts[y[i]] += 1
+    end
+    counts
+end
+
+function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::RefVector{U})
+    n, p = size(X)
+    length(y) == n || throw(DimensionMismatch("X and y must have the same number of rows."))
+    M = zeros(T, y.k, p)
+    @inbounds for j = 1:p, i = 1:n
+        M[y[i],j] += X[i,j]
+    end
+    M
+end
+
+# Compute matrix of class means
+#   X is uncentered data matrix
+#   y is one-based vector of class IDs
+function class_means{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::RefVector{U})
+    M   = class_totals(X, y)
+    n_k = class_counts(y)
+    scale!(one(T) ./ n_k, M)
+end
+
+# Center rows of X based on class mean in M
+#   X is uncentered data matrix
+#   M is matrix of class means (one per row)
+function center_classes!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::RefVector{U})
+    n, p = size(X)
+    @inbounds for j = 1:p, i = 1:n
+        X[i,j] -= M[y[i],j]
+    end
+    X
+end
 
 # Element-wise translate
 function translate!{T<:AbstractFloat}(A::Array{T}, b::T)
@@ -112,43 +162,6 @@ function dot_rows{T<:AbstractFloat}(X::Matrix{T})
     xᵀx
 end
 
-function class_counts{T<:Integer}(y::Vector{T}, k::T = maximum(y))
-    counts = zeros(Int64, k)
-    for i = 1:length(y)
-        y[i] <= k || error("Index $i out of range.")
-        counts[y[i]] += 1
-    end
-    counts
-end
-
-function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k::U = maximum(y))
-    n, p = size(X)
-    length(y) == n || throw(DimensionMismatch("X and y must have the same number of rows."))
-    M = zeros(T, k, p)
-    for j = 1:p, i = 1:n
-        M[y[i],j] += X[i,j]
-    end
-    M
-end
-
-# Compute matrix of class means
-#   X is uncentered data matrix
-#   y is one-based vector of class IDs
-function class_means{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::Vector{U}, k::U = maximum(y))
-    M = class_totals(X, y, k)
-    n_k = class_counts(y, k)
-    scale!(one(T) ./ n_k, M)
-end
-
-# Center rows of X based on class mean in M
-#   X is uncentered data matrix
-#   M is matrix of class means (one per row)
-function center_classes!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U})
-    @inbounds for ij in CartesianRange(size(X))
-        X[ij] -= M[y[ij.I[1]],ij.I[2]]
-    end
-    X
-end
 
 # Compute the symmetric matrix
 function gramian{T<:BlasReal}(H::Matrix{T}, α::T, symmetrize::Bool=true)
