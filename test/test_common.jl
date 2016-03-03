@@ -159,6 +159,20 @@ for T in FloatingPointTypes
     @test_approx_eq MOD.gramian(Ac, one(T)/(size(A,1)-1)) cov(A)
 end
 
+info("Testing ", MOD.whiten_data!)
+for T in FloatingPointTypes
+    X = T[1 0 0;
+          0 1 0;
+          0 0 1;
+          5 5 3]
+    μ = mean(X,1)
+    H = X .- μ
+    Σ = H'H/(size(X,1)-1)
+
+    W = MOD.whiten_data!(H, Nullable{T}())
+    @test_approx_eq eye(T,3) cov(X*W)
+
+end
 #=
 info("Testing ", MOD.dot_columns)
 for T in FloatingPointTypes

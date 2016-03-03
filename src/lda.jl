@@ -27,7 +27,7 @@ end
 #   M is matrix of class means (one per row)
 #   y is one-based vector of class IDs
 #   λ is nullable regularization parameter in [0,1]
-function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::Vector{U}, γ::Nullable{T})
+function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::RefVector{U}, γ::Nullable{T})
     H = center_classes!(X, M, y)
     W = whiten_data!(H, γ)
 end
@@ -35,17 +35,16 @@ end
 function cda!{T<:BlasReal,U<:Integer}(
         X::Matrix{T}, 
         M::Matrix{T}, 
-        y::Vector{U}, 
+        y::RefVector{U}, 
         γ::Nullable{T},
         priors::Vector{T}
     )
-    p = size(X,2)
-    k = length(priors)
+    length(priors) == y.k  || error("Priors length does not match class count")
     W_lda = lda!(X, M, y, γ)
     μ = vec(priors'M)
     H_mW = translate!(M, -μ) * W_lda
     _U, D, Vᵀ  = LAPACK.gesdd!('A', H_mW)
-    W = W_lda * transpose(Vᵀ[1:min(k-1,p),:])
+    W = W_lda * transpose(Vᵀ[1:min(y.k-1,size(X,2)),:])
 end
 
 doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model to the data in `X` 
@@ -53,12 +52,12 @@ based on class identifier `y`."
 function lda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
-        M::Matrix{T} = class_means(X,y),
+        M::Matrix{T} = class_means(X,RefVector(y)),
         gamma::Union{T,Nullable{T}} = Nullable{T}(),
         priors::Vector{T} = ones(T,maximum(y))/maximum(y)
     )
     γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
-    W = lda!(copy(X), M, y, γ)
+    W = lda!(copy(X), M, RefVector(y), γ)
     ModelLDA{T}(false, W, M, priors, γ)
 end
 
@@ -67,12 +66,12 @@ doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant mode
 function cda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::Vector{U};
-        M::Matrix{T} = class_means(X,y),
+        M::Matrix{T} = class_means(X,RefVector(y)),
         priors::Vector{T} = ones(T, maximum(y))/maximum(y),
         gamma::T = zero(T)
     )
     γ = gamma == 0 ? Nullable{T}() : Nullable(gamma)
-    W = cda!(copy(X), copy(M), y, γ, priors)
+    W = cda!(copy(X), copy(M), RefVector(y), γ, priors)
     ModelLDA{T}(true, W, M, priors, γ)
 end
 

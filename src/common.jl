@@ -12,7 +12,7 @@ immutable RefVector{T<:Integer} <: AbstractVector{T}
             (refmax = maximum(ref)) <= k || error("Class reference should not exceed $k; value $refmax found")
             length(unique(ref)) == k || error("A class between 1 and $k is not referenced.")
         end
-        new(ref, k)
+        new(copy(ref), k)
     end
 end
 function RefVector{T<:Integer}(y::Vector{T}, k::T = maximum(y), check_integrity::Bool = true)
@@ -59,6 +59,8 @@ end
 #   M is matrix of class means (one per row)
 function center_classes!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::RefVector{U})
     n, p = size(X)
+    size(M,2) == p   || error("X and M must have the same number of columns.")
+    size(M,1) == y.k || error("M should have as many rows as y has classes.")
     @inbounds for j = 1:p, i = 1:n
         X[i,j] -= M[y[i],j]
     end
@@ -187,7 +189,10 @@ function whiten_data!{T<:BlasReal}(H::Matrix{T}, γ::Nullable{T})
             D[i] /= sqrt(n-1)
         end
     end
-    all(D .>= ϵ) || error("Rank deficiency (collinearity) detected with tolerance $(ϵ).")
+    if !all(D .>= ϵ)
+        error("""Rank deficiency (collinearity) detected with tolerance $(ϵ). Ensure that all 
+                 classes have sufficient observations to produce a full-rank covariance matrix.""")
+    end
     transpose(scale!(1 ./ D, Vᵀ))
 end
 
