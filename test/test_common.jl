@@ -109,16 +109,6 @@ for T in FloatingPointTypes
     @test_approx_eq MOD.regularize!(copy(s), zero(T))  s
     @test_approx_eq MOD.regularize!(copy(s), one(T))   zero(s) .+ mean(s)
     @test_approx_eq MOD.regularize!(copy(s), one(T)/2) (1-one(T)/2)*s .+ (one(T)/2)*mean(s)
-
-
-    #@test_approx_eq MOD.regularize!(copy(S1), zero(T), s2)  S1
-    #@test_approx_eq MOD.regularize!(copy(S1), one(T),  s2)  diagm(s2)
-    #@test_approx_eq MOD.regularize!(copy(S1), one(T)/2, s2) (1-one(T)/2)*S1 + (one(T)/2)*diagm(s2)
-
-    #@test_throws ErrorException MOD.regularize!(copy(S1), -one(T),  s2)
-    #@test_throws ErrorException MOD.regularize!(copy(S1), 2*one(T), s2)
-
-    #@test_throws DimensionMismatch MOD.regularize!(S1, one(T), b)
 end
 
 info("Testing ", MOD.symml)
@@ -169,20 +159,35 @@ for T in FloatingPointTypes
     H = X .- μ
     Σ = H'H/(size(X,1)-1)
 
-    W = MOD.whiten_data!(H, Nullable{T}())
+    W = MOD.whiten_data!(copy(H), Nullable{T}())
     @test_approx_eq eye(T,3) cov(X*W)
 
+    for λ in (convert(T, 0.25), convert(T, 0.5), convert(T, 0.75))
+        W = MOD.whiten_data!(copy(H), Nullable(λ))
+        @test_approx_eq eye(T,3) W'*((1-λ)*Σ + (λ*trace(Σ)/size(X,2))*I)*W
+    end
+
+    H = eye(T,3) .- mean(eye(T,3))
+    @test_throws ErrorException MOD.whiten_data!(H, Nullable{T}())
 end
-#=
-info("Testing ", MOD.dot_columns)
+
+info("Testing ", MOD.whiten_cov!)
 for T in FloatingPointTypes
-    A  = T[1 2 3;
-           4 5 6;
-           7 8 9;
-           5 3 2]
+    X = T[1 0 0;
+          0 1 0;
+          0 0 1;
+          5 5 3]
+    μ = mean(X,1)
+    H = X .- μ
+    Σ = H'H/(size(X,1)-1)
 
-    @test_approx_eq MOD.dot_columns(A) sum(A .* A,1)
+    W = MOD.whiten_cov!(copy(Σ), Nullable{T}())
+    @test_approx_eq eye(T,3) cov(X*W)
+
+    for λ in (convert(T, 0.25), convert(T, 0.5), convert(T, 0.75))
+        W = MOD.whiten_cov!(copy(Σ), Nullable(λ))
+        @test_approx_eq eye(T,3) W'*((1-λ)*Σ + (λ*trace(Σ)/size(X,2))*I)*W
+    end
+
+    @test_throws ErrorException MOD.whiten_cov!(diagm([one(T); zero(T)]), Nullable{T}())
 end
-=#
-
-
