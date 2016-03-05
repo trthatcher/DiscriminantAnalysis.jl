@@ -22,7 +22,6 @@ function show(io::IO, model::ModelLDA)
     println(model.M)
 end
 
-
 #   X in uncentered data matrix
 #   M is matrix of class means (one per row)
 #   y is one-based vector of class IDs
@@ -30,6 +29,20 @@ end
 function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::RefVector{U}, γ::Nullable{T})
     H = center_classes!(X, M, y)
     W = whiten_data!(H, γ)
+end
+
+doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model to the data in `X` 
+based on class identifier `y`."
+function lda{T<:BlasReal,U<:Integer}(
+        X::Matrix{T},
+        y::Vector{U};
+        M::Matrix{T} = class_means(X,RefVector(y)),
+        gamma::Union{T,Nullable{T}} = Nullable{T}(),
+        priors::Vector{T} = ones(T,maximum(y))/maximum(y)
+    )
+    γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
+    W = lda!(copy(X), M, RefVector(y), γ)
+    ModelLDA{T}(false, W, M, priors, γ)
 end
 
 function cda!{T<:BlasReal,U<:Integer}(
@@ -45,20 +58,6 @@ function cda!{T<:BlasReal,U<:Integer}(
     H_mW = translate!(M, -μ) * W_lda
     _U, D, Vᵀ  = LAPACK.gesdd!('A', H_mW)
     W = W_lda * transpose(Vᵀ[1:min(y.k-1,size(X,2)),:])
-end
-
-doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model to the data in `X` 
-based on class identifier `y`."
-function lda{T<:BlasReal,U<:Integer}(
-        X::Matrix{T},
-        y::Vector{U};
-        M::Matrix{T} = class_means(X,RefVector(y)),
-        gamma::Union{T,Nullable{T}} = Nullable{T}(),
-        priors::Vector{T} = ones(T,maximum(y))/maximum(y)
-    )
-    γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
-    W = lda!(copy(X), M, RefVector(y), γ)
-    ModelLDA{T}(false, W, M, priors, γ)
 end
 
 doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant model to the data in
