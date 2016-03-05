@@ -194,6 +194,51 @@ discriminant function:
 Package Interface
 =================
 
+.. function:: lda(X, y [; M, gamma, priors]) -> ModelLDA
 
-Citations
-=========
+    Fit a regularized linear discriminant model based on data ``X`` and class 
+    identifier ``y``. ``X`` must be a matrix of floats and ``y`` must be a 
+    vector of positive integers that index the classes. ``M`` is an optional 
+    matrix of class means. If ``M`` is not supplied, it defaults to point 
+    estimates of the class means. Gamma is a regularization parameter that 
+    shrinks the covariance matrix towards the average eigenvalue:
+
+    .. math::
+
+        \mathbf{\Sigma}_{lda}(\gamma) = (1-\gamma)\mathbf{\Sigma} + \gamma
+          \left(\frac{\operatorname{trace}(\mathbf{\Sigma})}{p}\right) \mathbf{I}
+     
+    The ``priors`` argument represents the prior probability of class 
+    membership. If ``priors`` is not supplied, it defaults to equal class 
+    weights.
+
+    The components of the LDA model may be extracted from the ``ModelLDA`` 
+    object returned by the ``lda`` function:
+
+    ========== =====================================================
+    Argument   Description
+    ========== =====================================================
+    ``is_cda`` Boolean value; the model is a CDA model if ``true``
+    ``W``      The whitening matrix used to decorrelate observations
+    ``M``      A matrix of class means; one per row
+    ``priors`` A vector of class prior probabilities
+    ``gamma``  The regularization parameter as defined above.
+    ========== =====================================================
+
+
+.. function:: cda(X, y [; M, gamma, priors]) -> ModelLDA
+
+    Fit a regularized canonical discriminant model based on data ``X`` and class 
+    identifier ``y``. The CDA model is identical to an LDA model, except that
+    dimensionality reduction is included in the whitening transformation matrix.
+    See the ``lda`` documentation for information on the arguments.
+
+References
+==========
+
+.. [fried] Friedman J. 1989. *Regularized discriminant analysis.* Journal of
+           the American statistical association 84.405; p. 165-175.
+
+.. [hff] Hastie T, Tibshirani R, Friedman J, Franklin J. 2005. *The elements of
+         statistical learning: data mining, inference and prediction*. The 
+         Mathematical Intelligencer, 27(2); p. 83-85.

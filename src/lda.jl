@@ -40,6 +40,7 @@ function lda{T<:BlasReal,U<:Integer}(
         gamma::Union{T,Nullable{T}} = Nullable{T}(),
         priors::Vector{T} = ones(T,maximum(y))/maximum(y)
     )
+    all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
     γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
     W = lda!(copy(X), M, RefVector(isa(y,RefVector) ? y : RefVector(y)), γ)
@@ -70,6 +71,7 @@ function cda{T<:BlasReal,U<:Integer}(
         priors::Vector{T} = ones(T, maximum(y))/maximum(y),
         gamma::Union{T,Nullable{T}} = Nullable{T}()
     )
+    all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
     γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
     W = cda!(copy(X), copy(M), RefVector(y), γ, priors)
