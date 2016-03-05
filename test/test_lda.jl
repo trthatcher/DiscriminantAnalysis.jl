@@ -6,8 +6,9 @@ p = 3
 refs = vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...)
 Z = vcat([2*rand(n_k[i], p) .+ 3*(i-2) for i = 1:k]...)  # Linearly separable
 σ = sortperm(rand(sum(n_k)))
+refs = refs[σ]
 
-y = MOD.RefVector(refs[σ])
+y = MOD.RefVector(refs)
 X = Z[σ,:]
 M = MOD.class_means(X, y)
 H = MOD.center_classes!(copy(X), M, y)
@@ -32,6 +33,34 @@ for T in FloatingPointTypes
     end
 end
 
+info("Testing ", MOD.lda)
+for T in FloatingPointTypes
+    X_tmp = copy(convert(Matrix{T}, X))
+    M_tmp = convert(Matrix{T}, M)
+
+    model = MOD.lda(X_tmp, y, gamma=Nullable{T}())
+    W_tmp = MOD.lda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}())
+    @test model.is_cda == false
+    @test_approx_eq model.W W_tmp
+    @test_approx_eq model.M M_tmp
+
+    model = MOD.lda(X_tmp, refs, gamma=Nullable{T}())  # Check reference passing
+    W_tmp = MOD.lda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}())
+    @test model.is_cda == false
+    @test_approx_eq model.W W_tmp
+    @test_approx_eq model.M M_tmp
+
+    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
+        model = MOD.lda(X_tmp, y, gamma=Nullable(γ))
+        W_tmp = MOD.lda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}(γ))
+
+        @test model.is_cda == false
+        @test_approx_eq model.W W_tmp
+        @test_approx_eq model.M M_tmp
+    end
+end
+
+
 info("Testing ", MOD.cda!)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
@@ -51,38 +80,50 @@ for T in FloatingPointTypes
     end
 end
 
-
-
-
-#=
-info("Testing ", MOD.lda)
+info("Testing ", MOD.cda)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
     M_tmp = convert(Matrix{T}, M)
-    for U in IntegerTypes
-        y_tmp = convert(Vector{U}, y)
-        for γ in (zero(T), convert(T, 0.5), one(T))
-            W_tmp = MOD.lda!(copy(X_tmp), M_tmp, y_tmp, γ)
-            Model = MOD.lda(copy(X_tmp), y_tmp, gamma = γ)
-            @test_approx_eq W_tmp Model.W
-        end
+    priors_tmp = convert(Vector{T}, priors)
+
+    model = MOD.cda(X_tmp, y, gamma=Nullable{T}())
+    W_tmp = MOD.cda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}(), priors_tmp)
+    @test model.is_cda == true
+    @test_approx_eq model.W W_tmp
+    @test_approx_eq model.M M_tmp
+
+    model = MOD.cda(X_tmp, refs, gamma=Nullable{T}())  # Check reference passing
+    W_tmp = MOD.cda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}(), priors_tmp)
+    @test model.is_cda == true
+    @test_approx_eq model.W W_tmp
+    @test_approx_eq model.M M_tmp
+
+    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
+        model = MOD.cda(X_tmp, y, gamma=Nullable(γ))
+        W_tmp = MOD.cda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}(γ), priors_tmp)
+
+        @test model.is_cda == true
+        @test_approx_eq model.W W_tmp
+        @test_approx_eq model.M M_tmp
     end
 end
 
-
-info("Testing ", MOD.classify_lda)
+info("Testing ", MOD.discriminants_lda)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
-    M_tmp = convert(Matrix{T}, M)
-    priors = convert(Vector{T}, [1/k for i = 1:k])
-    for U in IntegerTypes
-        y_tmp = convert(Vector{U}, y)
-        Model1 = MOD.lda(X_tmp, y_tmp, gamma = zero(T))
-        Model2 = MOD.cda(X_tmp, y_tmp, gamma = zero(T))
-        @test all(y_tmp .== MOD.classify_lda(Model1.W, Model1.M, priors, X_tmp))
-        @test all(y_tmp .== MOD.classify_lda(Model2.W, Model2.M, priors, X_tmp))
-        @test all(y_tmp .== classify(Model1, X_tmp))
-        @test all(y_tmp .== classify(Model2, X_tmp))
+    priors_tmp = convert(Vector{T}, priors)
+
+    model = lda(X_tmp, y)
+    Z2 = hcat([MOD.dotrows((X_tmp .- M[i,:])*model.W) for i in eachindex(priors_tmp)]...)
+    δ = -Z2/2 .+ log(priors_tmp)'
+
+    @test_approx_eq δ MOD.discriminants(model, X_tmp)
+
+    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
+        model = lda(X_tmp, y)
+        Z2 = hcat([MOD.dotrows((X_tmp .- M[i,:])*model.W) for i in eachindex(priors_tmp)]...)
+        δ = -Z2/2 .+ log(priors_tmp)'
+
+        @test_approx_eq δ MOD.discriminants(model, X_tmp)
     end
 end
-=#

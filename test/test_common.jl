@@ -129,14 +129,14 @@ for T in FloatingPointTypes
 end
 
 
-info("Testing ", MOD.dot_rows)
+info("Testing ", MOD.dotrows)
 for T in FloatingPointTypes
     A  = T[1 2 3;
            4 5 6;
            7 8 9;
            5 3 2]
 
-    @test_approx_eq MOD.dot_rows(A) sum(A .* A,2)
+    @test_approx_eq MOD.dotrows(A) sum(A .* A,2)
 end
 
 info("Testing ", MOD.gramian)

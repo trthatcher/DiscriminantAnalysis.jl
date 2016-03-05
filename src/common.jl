@@ -154,15 +154,23 @@ function dot_columns{T<:AbstractFloat}(X::Matrix{T})
 end
 =#
 
+function zero!{T<:Number}(A::AbstractArray{T})
+    @inbounds for i in eachindex(A)
+        A[i] = zero(T)
+    end
+    A
+end
+
 # sum(X .* X, 1)
-function dot_rows{T<:AbstractFloat}(X::Matrix{T})
-    n, p = size(X)
-    xᵀx = zeros(n)
-    for j = 1:p, i = 1:n
-        xᵀx[i] += X[i,j]^2
+function dotrows!{T<:AbstractFloat}(X::Matrix{T}, xᵀx::Vector{T})
+    size(X,1) == length(xᵀx) || error("Vector xᵀx should have same number of rows as X")
+    zero!(xᵀx)
+    for I in CartesianRange(size(X))
+        xᵀx[I.I[1]] += X[I]^2
     end
     xᵀx
 end
+dotrows{T<:AbstractFloat}(X::Matrix{T}) = dotrows!(X, Array(T, size(X,1)))
 
 
 # Compute the symmetric matrix

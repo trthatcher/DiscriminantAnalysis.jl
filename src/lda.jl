@@ -35,13 +35,14 @@ doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model t
 based on class identifier `y`."
 function lda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
-        y::Vector{U};
+        y::AbstractVector{U};
         M::Matrix{T} = class_means(X,RefVector(y)),
         gamma::Union{T,Nullable{T}} = Nullable{T}(),
         priors::Vector{T} = ones(T,maximum(y))/maximum(y)
     )
+    isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
     γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
-    W = lda!(copy(X), M, RefVector(y), γ)
+    W = lda!(copy(X), M, RefVector(isa(y,RefVector) ? y : RefVector(y)), γ)
     ModelLDA{T}(false, W, M, priors, γ)
 end
 
@@ -52,7 +53,7 @@ function cda!{T<:BlasReal,U<:Integer}(
         γ::Nullable{T},
         priors::Vector{T}
     )
-    length(priors) == y.k  || error("Priors length does not match class count")
+    length(priors) == y.k  || error("Argument priors length does not match class count")
     W_lda = lda!(X, M, y, γ)
     μ = vec(priors'M)
     H_mW = translate!(M, -μ) * W_lda
@@ -64,12 +65,13 @@ doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant mode
 `X` based on class identifier `y`."
 function cda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
-        y::Vector{U};
+        y::AbstractVector{U};
         M::Matrix{T} = class_means(X,RefVector(y)),
         priors::Vector{T} = ones(T, maximum(y))/maximum(y),
-        gamma::T = zero(T)
+        gamma::Union{T,Nullable{T}} = Nullable{T}()
     )
-    γ = gamma == 0 ? Nullable{T}() : Nullable(gamma)
+    isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
+    γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
     W = cda!(copy(X), copy(M), RefVector(y), γ, priors)
     ModelLDA{T}(true, W, M, priors, γ)
 end
@@ -84,14 +86,15 @@ function discriminants_lda{T<:BlasReal}(
     p == size(W, 1) || throw(DimensionMismatch("oops"))
     d = size(W, 2)
     k = length(priors)
-    δ = Array(T, n, k)  # discriminant function values
-    H = Array(T, n, p)  # temporary array to prevent re-allocation k times
-    Q = Array(T, n, d)  # Q := H*W
+    δ   = Array(T, n, k) # discriminant function values
+    H   = Array(T, n, p) # temporary array to prevent re-allocation k times
+    Q   = Array(T, n, d) # Q := H*W
+    hᵀh = Array(T, n)    # diag(H'H)
     for j = 1:k
         translate!(copy!(H, Z), -vec(M[j,:]))
-        s = dot_rows(BLAS.gemm!('N', 'N', one(T), H, W, zero(T), Q))
+        dotrows!(BLAS.gemm!('N', 'N', one(T), H, W, zero(T), Q), hᵀh)
         for i = 1:n
-            δ[i, j] = -s[i]/2 + log(priors[j])
+            δ[i, j] = -hᵀh[i]/2 + log(priors[j])
         end
     end
     δ
