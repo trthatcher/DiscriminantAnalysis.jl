@@ -75,11 +75,12 @@ function discriminants_qda{T<:BlasReal}(
     δ = Array(T, n, k)  # discriminant function values
     H = Array(T, n, p)  # temporary array to prevent re-allocation k times
     Q = Array(T, n, p)  # Q := H*W_k
+    hᵀh = Array(T, n)
     for j = 1:k
         translate!(copy!(H, Z), -vec(M[j,:]))
-        s = dot_rows(BLAS.gemm!('N', 'N', one(T), H, W_k[j], zero(T), Q))
+        dotrows!(BLAS.gemm!('N', 'N', one(T), H, W_k[j], zero(T), Q), hᵀh)
         for i = 1:n
-            δ[i, j] = -s[i]/2 + log(priors[j])
+            δ[i, j] = -hᵀh[i]/2 + log(priors[j])
         end
     end
     δ

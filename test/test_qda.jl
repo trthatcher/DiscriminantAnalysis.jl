@@ -118,3 +118,21 @@ for T in FloatingPointTypes
         @test_approx_eq model.W_k[i] W_k_tmp[i]
     end
 end
+
+info("Testing ", MOD.discriminants_qda)
+for T in FloatingPointTypes
+    X_tmp = copy(convert(Matrix{T}, X))
+    priors_tmp = convert(Vector{T}, priors)
+
+    model = qda(X_tmp, y)
+    Z2 = hcat([MOD.dotrows((X_tmp .- M[i,:])*model.W_k[i]) for i in eachindex(priors_tmp)]...)
+    δ = -Z2/2 .+ log(priors_tmp)'
+    @test_approx_eq δ MOD.discriminants(model, X_tmp)
+
+    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
+        model = qda(X_tmp, y)
+        Z2 = hcat([MOD.dotrows((X_tmp .- M[i,:])*model.W_k[i]) for i in eachindex(priors_tmp)]...)
+        δ = -Z2/2 .+ log(priors_tmp)'
+        @test_approx_eq δ MOD.discriminants(model, X_tmp)
+    end
+end
