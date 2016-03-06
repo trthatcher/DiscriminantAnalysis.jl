@@ -1,4 +1,4 @@
-n_k = [6; 8; 10]
+n_k = [80; 100; 120]
 k = length(n_k)
 n = sum(n_k)
 p = 3
@@ -36,6 +36,13 @@ for T in FloatingPointTypes
                 S = (1-γ)*S + γ*trace(S)/p*I
                 @test_approx_eq eye(T,3) W_k[i]'*S*W_k[i]
             end
+        end
+    end
+    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
+        W_k = MOD.class_whiteners!(copy(H_tmp), y, Nullable(γ))
+        for i in eachindex(Σ_k)
+            S = (1-γ)*Σ_k[i] + γ*trace(Σ_k[i])/p*I
+            @test_approx_eq eye(T,3) W_k[i]'*S*W_k[i]
         end
     end
 end
