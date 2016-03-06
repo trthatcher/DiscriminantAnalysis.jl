@@ -46,3 +46,18 @@ for T in FloatingPointTypes
         end
     end
 end
+
+info("Testing ", MOD.qda!)
+for T in FloatingPointTypes
+    X_tmp = copy(convert(Matrix{T}, X))
+    M_tmp = convert(Matrix{T}, M)
+    H_tmp = convert(Matrix{T}, H)
+
+    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}(), Nullable{T}())
+    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, Nullable{T}())
+
+    for i in eachindex(W_k)
+        @test_approx_eq W_k[i] W_k_tmp[i]
+    end
+
+end
