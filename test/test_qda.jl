@@ -3,13 +3,7 @@ k = length(n_k)
 n = sum(n_k)
 p = 3
 
-refs = vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...)
-Z = vcat([2*rand(n_k[i], p) .+ 3*(i-2) for i = 1:k]...)  # Linearly separable
-σ = sortperm(rand(sum(n_k)))
-refs = refs[σ]
-
-y = MOD.RefVector(refs)
-X = Z[σ,:]
+y, X = sampledata(n_k, p)
 M = MOD.class_means(X, y)
 H = MOD.center_classes!(copy(X), M, y)
 Σ = H'H/(n-1)
@@ -20,7 +14,7 @@ for T in FloatingPointTypes
     H_tmp = convert(Array{T}, H)
     Σ_tmp = convert(Array{T}, Σ)
     f_k = one(T)./(MOD.class_counts(y) .- 1)
-    Σ_k = Array{T,2}[MOD.gramian(H_tmp[y .== i,:], f_k[i], true) for i = 1:y.k]
+    Σ_k = Array{T,2}[MOD.gramian(H_tmp[y .== i,:], f_k[i]) for i = 1:y.k]
 
     for λ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
         W_k = MOD.class_whiteners!(copy(H_tmp), y, Nullable{T}(), λ)
@@ -53,11 +47,74 @@ for T in FloatingPointTypes
     M_tmp = convert(Matrix{T}, M)
     H_tmp = convert(Matrix{T}, H)
 
-    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}(), Nullable{T}())
-    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, Nullable{T}())
-
+    γ = Nullable{T}()
+    λ = Nullable{T}()
+    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, γ, λ)
+    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, γ)
     for i in eachindex(W_k)
         @test_approx_eq W_k[i] W_k_tmp[i]
     end
 
+    γ = Nullable(one(T)/3)
+    λ = Nullable{T}()
+    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, γ, λ)
+    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, γ)
+    for i in eachindex(W_k)
+        @test_approx_eq W_k[i] W_k_tmp[i]
+    end
+
+    γ = Nullable{T}()
+    λ = Nullable(one(T)/3)
+    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, γ, λ)
+    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, γ, get(λ))
+    for i in eachindex(W_k)
+        @test_approx_eq W_k[i] W_k_tmp[i]
+    end
+
+    γ = Nullable{T}(one(T)/3)
+    λ = Nullable(one(T)/3)
+    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, γ, λ)
+    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, γ, get(λ))
+    for i in eachindex(W_k)
+        @test_approx_eq W_k[i] W_k_tmp[i]
+    end
+
+end
+
+info("Testing ", MOD.qda)
+for T in FloatingPointTypes
+    X_tmp = copy(convert(Matrix{T}, X))
+    M_tmp = convert(Matrix{T}, M)
+
+    γ = Nullable{T}()
+    λ = Nullable{T}()
+    W_k_tmp = MOD.qda!(copy(X_tmp), M_tmp, y, γ, λ)
+    model = qda(X_tmp, y)
+    for i in eachindex(W_k_tmp)
+        @test_approx_eq model.W_k[i] W_k_tmp[i]
+    end
+
+    γ = Nullable(one(T)/3)
+    λ = Nullable{T}()
+    W_k_tmp = MOD.qda!(copy(X_tmp), M_tmp, y, γ, λ)
+    model = qda(X_tmp, y, gamma=γ)
+    for i in eachindex(W_k_tmp)
+        @test_approx_eq model.W_k[i] W_k_tmp[i]
+    end
+
+    γ = Nullable{T}()
+    λ = Nullable(one(T)/3)
+    W_k_tmp = MOD.qda!(copy(X_tmp), M_tmp, y, γ, λ)
+    model = qda(X_tmp, y, lambda=λ)
+    for i in eachindex(W_k_tmp)
+        @test_approx_eq model.W_k[i] W_k_tmp[i]
+    end
+
+    γ = Nullable(one(T)/3)
+    λ = Nullable(one(T)/3)
+    W_k_tmp = MOD.qda!(copy(X_tmp), M_tmp, y, γ, λ)
+    model = qda(X_tmp, y, lambda=λ, gamma=γ)
+    for i in eachindex(W_k_tmp)
+        @test_approx_eq model.W_k[i] W_k_tmp[i]
+    end
 end

@@ -29,7 +29,7 @@ end
 
 function class_counts{T<:Integer}(y::RefVector{T})
     counts = zeros(Int64, y.k)
-    @inbounds for i in eachindex(y)
+    for i in eachindex(y)
         counts[y[i]] += 1
     end
     counts
@@ -39,7 +39,7 @@ function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::RefVector{U}
     n, p = size(X)
     length(y) == n || throw(DimensionMismatch("X and y must have the same number of rows."))
     M = zeros(T, y.k, p)
-    @inbounds for j = 1:p, i = 1:n
+    for j = 1:p, i = 1:n
         M[y[i],j] += X[i,j]
     end
     M
@@ -61,7 +61,7 @@ function center_classes!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}
     n, p = size(X)
     size(M,2) == p   || error("X and M must have the same number of columns.")
     size(M,1) == y.k || error("M should have as many rows as y has classes.")
-    @inbounds for j = 1:p, i = 1:n
+    for j = 1:p, i = 1:n
         X[i,j] -= M[y[i],j]
     end
     X
@@ -69,7 +69,7 @@ end
 
 # Element-wise translate
 function translate!{T<:AbstractFloat}(A::Array{T}, b::T)
-    @inbounds for i = 1:length(A)
+    for i = 1:length(A)
         A[i] += b
     end
     A
@@ -79,7 +79,7 @@ translate!{T<:AbstractFloat}(b::T, A::Array{T}) = translate!(A, b)
 # A := A .+ b'
 function translate!{T<:AbstractFloat}(b::Vector{T}, A::Matrix{T})
     (n = size(A,1)) == length(b) || throw(DimensionMismatch("first dimension of A does not match length of b"))
-    @inbounds for j = 1:size(A,2), i = 1:n
+    for j = 1:size(A,2), i = 1:n
         A[i,j] += b[i]
     end
     A
@@ -88,7 +88,7 @@ end
 # A := b .+ A
 function translate!{T<:AbstractFloat}(A::Matrix{T}, b::Vector{T})
     (n = size(A,2)) == length(b) || throw(DimensionMismatch("second dimension of A does not match length of b"))
-    @inbounds for j = 1:n, i = 1:size(A,1)
+    for j = 1:n, i = 1:size(A,1)
         A[i,j] += b[j]
     end
     A
@@ -110,7 +110,7 @@ end
 function regularize!{T<:AbstractFloat}(Λ::Vector{T}, γ::T)
     0 <= γ <= 1 || error("γ = $(γ) must be in the interval [0,1]")
     λ_avg = mean(Λ)
-    @inbounds for i in eachindex(Λ)
+    for i in eachindex(Λ)
         Λ[i] = (1-γ)*Λ[i] + γ*λ_avg
     end
     Λ
@@ -135,7 +135,7 @@ end
 # Symmetrize the lower half of matrix S using the upper half of S
 function symml!(S::Matrix)
     (p = size(S,1)) == size(S,2) || throw(ArgumentError("S must be square"))
-    @inbounds for j = 1:(p - 1), i = (j + 1):p 
+    for j = 1:(p - 1), i = (j + 1):p 
         S[i, j] = S[j, i]
     end
     S
@@ -172,14 +172,8 @@ function dotrows!{T<:AbstractFloat}(X::Matrix{T}, xᵀx::Vector{T})
 end
 dotrows{T<:AbstractFloat}(X::Matrix{T}) = dotrows!(X, Array(T, size(X,1)))
 
-
 # Compute the symmetric matrix
-function gramian{T<:BlasReal}(H::Matrix{T}, α::T, symmetrize::Bool=true)
-    p = size(H,2)
-    Σ = BLAS.syrk!('U', 'T', α, H, zero(T), Array(T,p,p))
-    symmetrize ? symml!(Σ) : Σ
-end
-
+gramian{T<:BlasReal}(H::Matrix{T}, α::T) = scale!(H'H, α)
 
 # Uses a singular value decomposition to whiten a centered matrix H
 # Regularization parameter γ shrinks towards average eigenvalue
@@ -208,6 +202,10 @@ end
 # Regularization parameter γ shrinks towards average eigenvalue
 function whiten_cov!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
     ϵ = eps(T) * prod(size(Σ)) * maximum(Σ)
+    if ϵ > 1
+        println(Σ)
+        println(γ)
+    end
     Λ, V = LAPACK.syev!('V', 'U', Σ)
     if !isnull(γ)
         regularize!(Λ, get(γ))

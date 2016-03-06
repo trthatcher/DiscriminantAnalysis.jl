@@ -3,13 +3,7 @@ k = length(n_k)
 n = sum(n_k)
 p = 3
 
-refs = vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...)
-Z = vcat([2*rand(n_k[i], p) .+ 3*(i-2) for i = 1:k]...)  # Linearly separable
-σ = sortperm(rand(sum(n_k)))
-refs = refs[σ]
-
-y = MOD.RefVector(refs)
-X = Z[σ,:]
+y, X = sampledata(n_k, p)
 M = MOD.class_means(X, y)
 H = MOD.center_classes!(copy(X), M, y)
 Σ = H'H/(n-1)
@@ -39,12 +33,6 @@ for T in FloatingPointTypes
     M_tmp = convert(Matrix{T}, M)
 
     model = MOD.lda(X_tmp, y, gamma=Nullable{T}())
-    W_tmp = MOD.lda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}())
-    @test model.is_cda == false
-    @test_approx_eq model.W W_tmp
-    @test_approx_eq model.M M_tmp
-
-    model = MOD.lda(X_tmp, refs, gamma=Nullable{T}())  # Check reference passing
     W_tmp = MOD.lda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}())
     @test model.is_cda == false
     @test_approx_eq model.W W_tmp
@@ -92,7 +80,7 @@ for T in FloatingPointTypes
     @test_approx_eq model.W W_tmp
     @test_approx_eq model.M M_tmp
 
-    model = MOD.cda(X_tmp, refs, gamma=Nullable{T}())  # Check reference passing
+    model = MOD.cda(X_tmp, y, gamma=Nullable{T}())  # Check reference passing
     W_tmp = MOD.cda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}(), priors_tmp)
     @test model.is_cda == true
     @test_approx_eq model.W W_tmp

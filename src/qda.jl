@@ -3,7 +3,7 @@
 ==========================================================================#
 
 immutable ModelQDA{T<:BlasReal}
-    W_k::Array{Matrix{T},1}  # Vector of class whitening matrices
+    W_k::Vector{Matrix{T}}  # Vector of class whitening matrices
     M::Matrix{T}             # Matrix of class means (one per row)
     priors::Vector{T}        # Vector of class priors
     gamma::Nullable{T}
@@ -18,7 +18,7 @@ function class_whiteners!{T<:BlasReal,U<:Integer}(
         λ::T
     )
     f_k = one(T) ./ (class_counts(y) .- one(U))
-    Σ_k = Array{T,2}[gramian(H[y .== i,:], f_k[i], false) for i = 1:y.k]
+    Σ_k = Matrix{T}[gramian(H[y .== i,:], f_k[i]) for i = 1:y.k]
     Σ   = gramian(H, one(T)/(size(H,1)-1))
     for S in Σ_k 
         regularize!(S, λ, Σ)
@@ -29,15 +29,15 @@ end
 
 # No λ-regularization - only need data matrices
 function class_whiteners!{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::RefVector{U}, γ::Nullable{T})
-    Array{T,2}[whiten_data!(H[y .== i,:], γ) for i = 1:y.k]
+    Matrix{T}[whiten_data!(H[y .== i,:], γ) for i = 1:y.k]
 end
 
 function qda!{T<:BlasReal,U<:Integer}(
         X::Matrix{T}, 
         M::Matrix{T}, 
         y::RefVector{U}, 
-        λ::Nullable{T}, 
-        γ::Nullable{T}
+        γ::Nullable{T},
+        λ::Nullable{T}
     )
     H = center_classes!(X, M, y)
     isnull(λ) ? class_whiteners!(H, y, γ) : class_whiteners!(H, y, γ, get(λ))
@@ -49,15 +49,15 @@ function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::AbstractVector{U};
         M::Matrix{T} = class_means(X,RefVector(y)),
-        gamma::Union{T,Nullable{T}}  = zero(T),
-        lambda::Union{T,Nullable{T}} = zero(T),
+        gamma::Union{T,Nullable{T}}  = Nullable{T}(),
+        lambda::Union{T,Nullable{T}} = Nullable{T}(),
         priors::Vector{T} = ones(T,maximum(y))/maximum(y)
     )
     all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
-    γ = isa(gamma,  Nullable) ? gamma  : Nullable(gamma)
-    λ = isa(lambda, Nullable) ? lambda : Nullable(lambda)
-    W_k = qda!(copy(X), M, isa(y,RefVector) ? y : RefVector(y), λ, γ)
+    γ = isa(gamma,  Nullable) ? deepcopy(gamma)  : Nullable(gamma)
+    λ = isa(lambda, Nullable) ? deepcopy(lambda) : Nullable(lambda)
+    W_k = qda!(copy(X), M, isa(y,RefVector) ? y : RefVector(y), γ, λ)
     ModelQDA{T}(W_k, M, priors, γ, λ)
 end
 
