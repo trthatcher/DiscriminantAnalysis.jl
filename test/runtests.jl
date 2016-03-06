@@ -8,4 +8,4 @@ IntegerTypes = (Int32, Int64)
 
 include("test_common.jl")
 include("test_lda.jl")
-#include("test_qda.jl")
+include("test_qda.jl")
