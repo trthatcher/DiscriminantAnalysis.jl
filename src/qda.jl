@@ -4,10 +4,23 @@
 
 immutable ModelQDA{T<:BlasReal}
     W_k::Vector{Matrix{T}}  # Vector of class whitening matrices
-    M::Matrix{T}             # Matrix of class means (one per row)
-    priors::Vector{T}        # Vector of class priors
+    M::Matrix{T}            # Matrix of class means (one per row)
+    priors::Vector{T}       # Vector of class priors
     gamma::Nullable{T}
     lambda::Nullable{T}
+end
+
+function show(io::IO, model::ModelQDA)
+    println(io, "Quadratic Discriminant Model")
+    println(io, "\nRegularization Parameters:")
+    println(io, "γ = ", isnull(model.gamma) ? "n/a" : string(get(model.gamma)))
+    println(io, "λ = ", isnull(model.lambda) ? "n/a" : string(get(model.lambda)))
+    println(io, "\nPrior Probabilities:")
+    for i in eachindex(model.priors)
+        println(io, "Class ", i, ": ", model.priors[i])
+    end
+    println(io, "\nGroup Means (one per row):")
+    println(io, model.M)
 end
 
 # λ-regularized QDA - require full covariance matrices

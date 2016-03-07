@@ -136,3 +136,6 @@ for T in FloatingPointTypes
         @test_approx_eq δ MOD.discriminants(model, X_tmp)
     end
 end
+
+info("Testing ", MOD.ModelQDA)
+show(DevNull, qda(X, y))

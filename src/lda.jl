@@ -11,15 +11,15 @@ immutable ModelLDA{T<:BlasReal}
 end
 
 function show(io::IO, model::ModelLDA)
-    println(io, (model.is_cda ? "Canonical" : "Linear") * " Discriminant Analysis")
+    println(io, (model.is_cda ? "Canonical" : "Linear") * " Discriminant Model")
     println(io, "\nRegularization Parameters:")
-    println("γ = ", isnull(model.gamma) ? "n/a" : string(get(model.gamma)))
-    println("\nPrior Probabilities:")
+    println(io, "γ = ", isnull(model.gamma) ? "n/a" : string(get(model.gamma)))
+    println(io, "\nPrior Probabilities:")
     for i in eachindex(model.priors)
-        println("Class ", i, ": ", model.priors[i])
+        println(io, "Class ", i, ": ", model.priors[i])
     end
-    println("\nGroup Means (one per row):")
-    println(model.M)
+    println(io, "\nGroup Means (one per row):")
+    println(io, model.M)
 end
 
 #   X in uncentered data matrix
