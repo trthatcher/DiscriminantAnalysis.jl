@@ -260,8 +260,8 @@ Package Interface
     .. math::
 
         \mathbf{\Sigma}_{k}(\gamma,\lambda) 
-        = (1-\gamma)\mathbf{\Sigma}(\lambda) + \gamma
-          \left(\frac{\operatorname{trace}(\mathbf{\Sigma}(\lambda))}{p}\right) \mathbf{I}
+        = (1-\gamma)\mathbf{\Sigma}_{k}(\lambda) + \gamma
+          \left(\frac{\operatorname{trace}(\mathbf{\Sigma}_{k}(\lambda))}{p}\right) \mathbf{I}
      
     The components of the QDA model may be extracted from the ``ModelQDA`` 
     object returned by the ``qda`` function:
