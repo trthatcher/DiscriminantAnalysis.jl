@@ -194,23 +194,26 @@ discriminant function:
 Package Interface
 =================
 
-.. function:: lda(X, y [; M, gamma, priors]) -> ModelLDA
+.. function:: lda(X, y [; M, priors, gamma])
 
     Fit a regularized linear discriminant model based on data ``X`` and class 
     identifier ``y``. ``X`` must be a matrix of floats and ``y`` must be a 
     vector of positive integers that index the classes. ``M`` is an optional 
     matrix of class means. If ``M`` is not supplied, it defaults to point 
-    estimates of the class means. Gamma is a regularization parameter that 
-    shrinks the covariance matrix towards the average eigenvalue:
+    estimates of the class means. The ``priors`` argument represents the prior 
+    probability of class membership. If ``priors`` is not supplied, it defaults
+    to equal class weights.
+    
+    Gamma is a regularization parameter that shrinks the covariance matrix 
+    towards the average eigenvalue:
 
     .. math::
 
-        \mathbf{\Sigma}_{lda}(\gamma) = (1-\gamma)\mathbf{\Sigma} + \gamma
+        \mathbf{\Sigma}(\gamma) = (1-\gamma)\mathbf{\Sigma} + \gamma
           \left(\frac{\operatorname{trace}(\mathbf{\Sigma})}{p}\right) \mathbf{I}
-     
-    The ``priors`` argument represents the prior probability of class 
-    membership. If ``priors`` is not supplied, it defaults to equal class 
-    weights.
+
+    This type of regularization can be used counteract bias in the eigenvalue
+    estimates generated from the sample covariance matrix.
 
     The components of the LDA model may be extracted from the ``ModelLDA`` 
     object returned by the ``lda`` function:
@@ -226,12 +229,68 @@ Package Interface
     ========== =====================================================
 
 
-.. function:: cda(X, y [; M, gamma, priors]) -> ModelLDA
+.. function:: cda(X, y [; M, priors, gamma])
 
     Fit a regularized canonical discriminant model based on data ``X`` and class 
     identifier ``y``. The CDA model is identical to an LDA model, except that
     dimensionality reduction is included in the whitening transformation matrix.
     See the ``lda`` documentation for information on the arguments.
+
+.. function:: qda(X, y [; M, priors, gamma, lambda])
+
+    Fit a regularized quadratic discriminant model based on data ``X`` and class 
+    identifier ``y``. ``X`` must be a matrix of floats and ``y`` must be a 
+    vector of positive integers that index the classes. ``M`` is an optional 
+    matrix of class means. If ``M`` is not supplied, it defaults to point 
+    estimates of the class means. The ``priors`` argument represents the prior 
+    probability of class membership. If ``priors`` is not supplied, it defaults
+    to equal class weights.
+    
+    Lambda is a regularization parameter that shrinks the class covariance 
+    matrices towards the overall covariance matrix:
+
+    .. math::
+
+        \mathbf{\Sigma}_{k}(\lambda) = (1-\lambda)\mathbf{\Sigma}_k 
+         + \lambda \mathbf{\Sigma})
+
+    As in LDA, gamma is a regularization parameter that shrinks the covariance
+    matrix towards the average eigenvalue:
+
+    .. math::
+
+        \mathbf{\Sigma}_{k}(\gamma,\lambda) 
+        = (1-\gamma)\mathbf{\Sigma}(\lambda) + \gamma
+          \left(\frac{\operatorname{trace}(\mathbf{\Sigma}(\lambda))}{p}\right) \mathbf{I}
+     
+    The components of the QDA model may be extracted from the ``ModelQDA`` 
+    object returned by the ``qda`` function:
+
+    ========== =====================================================
+    Argument   Description
+    ========== =====================================================
+    ``W_k``    The vector of whitening matrices (one per class)
+    ``M``      A matrix of class means; one per row
+    ``priors`` A vector of class prior probabilities
+    ``gamma``  The regularization parameter as defined above.
+    ``lambda`` The regularization parameter as defined above.
+    ========== =====================================================
+
+.. function:: discriminants(model, Z)
+
+    Returns a matrix of discriminant function values based on the ``model``
+    instance for each observation in data matrix ``Z``. Each column of values 
+    corresponds to the discriminant function values for the class. For example,
+    ``Z[i,j]`` corresponds to the discriminant function value for observation
+    ``i`` relative to class ``j``.
+
+.. function:: classify(model, Z)
+
+    Returns a vector of class indices based on the classification rule. This is
+    equivalent of choosing the column corresponding to the maximum discriminant
+    function value for each row in the matrix returned by ``discriminants`` with
+    the same arguments.
+
 
 References
 ==========
