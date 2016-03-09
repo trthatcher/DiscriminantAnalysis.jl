@@ -74,9 +74,9 @@ this simplifies the discriminant function to a linear classifier:
     \frac{1}{2}\mathbf{\mu_k}\Sigma^{-1}\mathbf{\mu_k}
     + \log(\pi_k)
 
-The following plot shows the linear classification boundaries that result when
-the iris data set is modelled using linear discriminant analysis on two
-variables:
+The following plot shows the linear classification boundaries that result when a
+sample data set of two bi-variate Gaussian variables is modelled using linear
+discriminant analysis:
 
 .. image:: visualization/lda.png
 
@@ -96,8 +96,9 @@ classifier in :math:`\mathbf{x}`:
     + \log(\pi_k)
 
 The following plot shows the quadratic classification boundaries that result 
-when the iris data set is modelled using linear discriminant analysis on two
-variables:
+when a sample data set of two bi-variate Gaussian variables is modelled using 
+quadratic discriminant analysis:
+
 
 .. image:: visualization/qda.png
 
@@ -252,7 +253,7 @@ Package Interface
     .. math::
 
         \mathbf{\Sigma}_{k}(\lambda) = (1-\lambda)\mathbf{\Sigma}_k 
-         + \lambda \mathbf{\Sigma})
+         + \lambda \mathbf{\Sigma}
 
     As in LDA, gamma is a regularization parameter that shrinks the covariance
     matrix towards the average eigenvalue:
@@ -278,19 +279,17 @@ Package Interface
 
 .. function:: discriminants(model, Z)
 
-    Returns a matrix of discriminant function values based on the ``model``
-    instance for each observation in data matrix ``Z``. Each column of values 
-    corresponds to the discriminant function values for the class. For example,
-    ``Z[i,j]`` corresponds to the discriminant function value for observation
-    ``i`` relative to class ``j``.
+    Returns a matrix of discriminant function values based on ``model``. Each
+    column of values corresponds to a class discriminant function and each row
+    corresponds to the discriminant function values for an observation in ``Z``.
+    For example, ``Z[i,j]`` corresponds to the discriminant function value of
+    class ``j`` for observation ``i``.
 
 .. function:: classify(model, Z)
 
-    Returns a vector of class indices based on the classification rule. This is
-    equivalent of choosing the column corresponding to the maximum discriminant
-    function value for each row in the matrix returned by ``discriminants`` with
-    the same arguments.
-
+    Returns a vector of class indices based on the classification rule. This
+    function takes the output of the ``discriminants`` function and applies
+    ``indmax`` to each row to determine the class.
 
 References
 ==========
