@@ -195,6 +195,26 @@ discriminant function:
 Package Interface
 =================
 
+.. _format notes:
+
+.. note::
+
+    In DiscriminantAnalysis.jl, the input data matrix ``X`` is assumed to be 
+    stored in the same format as a `design matrix`_ in statistics. In other 
+    words, each row of ``X`` corresponds to an observation vector:
+
+    .. math:: \mathbf{X} = 
+                  \begin{bmatrix} 
+                      \leftarrow \mathbf{x}_1 \rightarrow \\ 
+                      \leftarrow \mathbf{x}_2 \rightarrow \\ 
+                      \vdots \\ 
+                      \leftarrow \mathbf{x}_n \rightarrow 
+                   \end{bmatrix}
+    
+    This differs from other Julia packages.
+
+.. _design matrix: https://en.wikipedia.org/wiki/Design_matrix
+
 .. function:: lda(X, y [; M, priors, gamma])
 
     Fit a regularized linear discriminant model based on data ``X`` and class 
@@ -204,6 +224,10 @@ Package Interface
     estimates of the class means. The ``priors`` argument represents the prior 
     probability of class membership. If ``priors`` is not supplied, it defaults
     to equal class weights.
+
+    .. note::
+
+        See the `format notes`_ for the data matrix ``X``.
     
     Gamma is a regularization parameter that shrinks the covariance matrix 
     towards the average eigenvalue:
@@ -247,6 +271,10 @@ Package Interface
     probability of class membership. If ``priors`` is not supplied, it defaults
     to equal class weights.
     
+    .. note::
+
+        See the `format notes`_ for the data matrix ``X``.
+
     Lambda is a regularization parameter that shrinks the class covariance 
     matrices towards the overall covariance matrix:
 
