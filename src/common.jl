@@ -2,7 +2,8 @@
   Common Methods
 ==========================================================================#
 
-# Helper type for references
+#== Reference Vector ==#
+
 immutable RefVector{T<:Integer} <: AbstractVector{T}
     ref::Vector{T}
     k::T
@@ -27,7 +28,10 @@ function convert{U<:Integer}(::Type{RefVector{U}}, y::RefVector)
     RefVector(copy(convert(Vector{U}, y.ref)), convert(U, y.k), false)
 end
 
-function class_counts{T<:Integer}(y::RefVector{T})
+
+#== Class Matrix Functions ==#
+
+function classcounts{T<:Integer}(y::RefVector{T})
     counts = zeros(Int64, y.k)
     for i in eachindex(y)
         counts[y[i]] += 1
@@ -35,9 +39,11 @@ function class_counts{T<:Integer}(y::RefVector{T})
     counts
 end
 
-function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::RefVector{U})
+function classtotals{T<:AbstractFloat}(::Type{Val{:row}}, X::Matrix{T}, y::RefVector)
     n, p = size(X)
-    length(y) == n || throw(DimensionMismatch("X and y must have the same number of rows."))
+    if length(y) != n
+        throw(DimensionMismatch("X and y must have the same number of rows."))
+    end
     M = zeros(T, y.k, p)
     for j = 1:p, i = 1:n
         M[y[i],j] += X[i,j]
@@ -45,54 +51,69 @@ function class_totals{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::RefVector{U}
     M
 end
 
+function classtotals{T<:AbstractFloat}(::Type{Val{:col}}, X::Matrix{T}, y::RefVector)
+    p, n = size(X)
+    if length(y) != n
+        throw(DimensionMismatch("X and y must have the same number of columns."))
+    end
+    M = zeros(T, p, y.k)
+    for j = 1:n, i = 1:p
+        M[i,y[j]] += X[i,j]
+    end
+    M
+end
+
 # Compute matrix of class means
 #   X is uncentered data matrix
 #   y is one-based vector of class IDs
-function class_means{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, y::RefVector{U})
-    M   = class_totals(X, y)
-    n_k = class_counts(y)
+function classmeans{T<:AbstractFloat}(::Type{Val{:row}}, X::Matrix{T}, y::RefVector)
+    M   = classtotals(Val{:row}, X, y)
+    n_k = classcounts(y)
     scale!(one(T) ./ n_k, M)
 end
+
+function classmeans{T<:AbstractFloat}(::Type{Val{:col}}, X::Matrix{T}, y::RefVector)
+    M   = classtotals(Val{:col}, X, y)
+    n_k = classcounts(y)
+    scale!(M, one(T) ./ n_k)
+end
+
 
 # Center rows of X based on class mean in M
 #   X is uncentered data matrix
 #   M is matrix of class means (one per row)
-function center_classes!{T<:AbstractFloat,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::RefVector{U})
+function centerclasses!{T<:AbstractFloat}(
+         ::Type{Val{:row}},
+        X::Matrix{T}, 
+        M::Matrix{T}, 
+        y::RefVector
+    )
     n, p = size(X)
-    size(M,2) == p   || error("X and M must have the same number of columns.")
-    size(M,1) == y.k || error("M should have as many rows as y has classes.")
+    size(M,2) == p   || throw(DimensionMismatch("X and M must have the same number of columns."))
+    size(M,1) == y.k || throw(DimensionMismatch("M should have as many rows as y has classes."))
     for j = 1:p, i = 1:n
         X[i,j] -= M[y[i],j]
     end
     X
 end
 
-# Element-wise translate
-function translate!{T<:AbstractFloat}(A::Array{T}, b::T)
-    for i = 1:length(A)
-        A[i] += b
+function centerclasses!{T<:AbstractFloat}(
+         ::Type{Val{:col}},
+        X::Matrix{T}, 
+        M::Matrix{T}, 
+        y::RefVector
+    )
+    p, n = size(X)
+    size(M,2) == y.k || throw(DimensionMismatch("M should have as many columns as y has classes."))
+    size(M,1) == p   || throw(DimensionMismatch("X and M must have the same number of rows."))
+    for j = 1:p, i = 1:n
+        X[i,j] -= M[y[i],j]
     end
-    A
-end
-translate!{T<:AbstractFloat}(b::T, A::Array{T}) = translate!(A, b)
-
-# A := A .+ b'
-function translate!{T<:AbstractFloat}(b::Vector{T}, A::Matrix{T})
-    (n = size(A,1)) == length(b) || throw(DimensionMismatch("first dimension of A does not match length of b"))
-    for j = 1:size(A,2), i = 1:n
-        A[i,j] += b[i]
-    end
-    A
+    X
 end
 
-# A := b .+ A
-function translate!{T<:AbstractFloat}(A::Matrix{T}, b::Vector{T})
-    (n = size(A,2)) == length(b) || throw(DimensionMismatch("second dimension of A does not match length of b"))
-    for j = 1:n, i = 1:size(A,1)
-        A[i,j] += b[j]
-    end
-    A
-end
+
+#== Regularization Functions ==#
 
 # S1 := (1-λ)S1+ λS2
 function regularize!{T<:AbstractFloat}(S1::Matrix{T}, λ::T, S2::Matrix{T})
@@ -100,66 +121,147 @@ function regularize!{T<:AbstractFloat}(S1::Matrix{T}, λ::T, S2::Matrix{T})
     (m = size(S2,1)) == size(S2,2) || throw(DimensionMismatch("Matrix S2 must be square."))
     n == m || throw(DimensionMismatch("Matrix S1 and S2 must be of the same order."))
     0 <= λ <= 1 || error("λ = $(λ) must be in the interval [0,1]")
-    for j = 1:n, i = 1:n
-            S1[i,j] = (1-λ)*S1[i,j] + λ*S2[i,j]
+    for I in CartesianRange((n,n))
+        S1[I] = (1-λ)*S1[I] + λ*S2[I]
     end
     S1
 end
 
-# if S = UΛUᵀ then Λ := (1-γ)Λ .+ γ*λ_avg  => S := (1-γ)S + γ*λ_avg
-function regularize!{T<:AbstractFloat}(Λ::Vector{T}, γ::T)
-    0 <= γ <= 1 || error("γ = $(γ) must be in the interval [0,1]")
-    λ_avg = mean(Λ)
-    for i in eachindex(Λ)
-        Λ[i] = (1-γ)*Λ[i] + γ*λ_avg
-    end
-    Λ
-end
-
-
-# S1 := (1-λ)S1+ λ*diagm(s2)
-#=
-function regularize!{T<:AbstractFloat}(S::Matrix{T}, λ::T, s::Vector{T})
+# S := (1-γ)S + γ*I*λ_avg
+function regularize!{T<:AbstractFloat}(S::Matrix{T}, γ::T)
     (n = size(S,1)) == size(S,2) || throw(DimensionMismatch("Matrix S must be square."))
-    n == length(s) || throw(DimensionMismatch("The length vector s must be the order of S."))
-    0 <= λ <= 1 || error("λ = $(λ) must be in the interval [0,1]")
-    scale!(S, (1-λ))
+    0 <= γ <= 1 || error("γ = $(γ) must be in the interval [0,1]")
+    λ_avg = trace(S)/n
+    scale!(S, 1-γ)
     for i = 1:n
-        S[i,i] += λ*s[i]
+        S[i,i] += γ*λ_avg
     end
     S
 end
-=#
 
-
-# Symmetrize the lower half of matrix S using the upper half of S
-function symml!(S::Matrix)
-    (p = size(S,1)) == size(S,2) || throw(ArgumentError("S must be square"))
-    for j = 1:(p - 1), i = (j + 1):p 
-        S[i, j] = S[j, i]
+for (scheme, dimension) in ((:row, 1), (:col, 2))
+    function dotvectors!{T<:AbstractFloat}(
+             ::Type{Val{$scheme}},
+            X::AbstractMatrix{T}, 
+            xᵀx::Vector{T}
+        )
+        if !(size(X,$dimension) == length(xᵀx))
+            errorstring = string("Dimension mismatch on dimension ", $dimension)
+            throw(DimensionMismatch(errorstring))
+        end
+        fill!(xᵀx, zero(T))
+        for I in CartesianRange(size(X))
+            xᵀx[I.I[$dimension]] += X[I]^2
+        end
+        xᵀx
     end
-    S
 end
-symml(S::Matrix) = symml!(copy(S))
 
-# sum(X .* X, 2)
+
+#== Whitening Functions ==#
+
 #=
-function dot_columns{T<:AbstractFloat}(X::Matrix{T})
-    n, p = size(X)
-    xᵀx = zeros(p)
-    for j = 1:p, i = 1:n
-        xᵀx[j] += X[i,j]^2
-    end
-    xᵀx
-end
+Random Vector: (assume centered)
+    Cov(x) = E(xxᵀ) = Σ  =>  Cov(Wᵀx) = WᵀCov(x)W = WᵀΣW
+    Σ = VD²Vᵀ
+    WᵀΣW = I  =>  WᵀVD²VᵀW = (DVᵀW)ᵀ(DVᵀW)
+
+Row-Major Data Matrix:
+    Cov(X) = XᵀX => Cov(XW) = WᵀXᵀXW
+
+Column-Major Data Matrix:
+    Cov(X) = XXᵀ => Cov(WX
+
 =#
 
-function zero!{T<:Number}(A::AbstractArray{T})
-    @inbounds for i in eachindex(A)
-        A[i] = zero(T)
+# Uses SVD decomposition to whiten the implicit γ-regularized covariance matrix
+# Assumes H is row major, returns Wᵀ 
+function whitendata_svd!{T<:BlasReal}(H::Matrix{T}, γ::T)
+    n, m = size(H)
+    ϵ = eps(T) * n * m * maximum(H)
+    UDVᵀ = svdfact!(H)
+    D = UDVᵀ.D
+    λ_avg = zero(T)
+    @inbounds for i in eachindex(D)
+        D[i] = (D[i]^2)/(n-1)  # λi for Σ = H'H/(n-1)
+        λ_avg += D[i]
     end
-    A
+    λ_avg /= length(D)
+    @inbounds for i in eachindex(D)
+        D[i] = sqrt((1-γ)*D[i] + γ*λ_avg)
+    end
+    if !all(D .>= ϵ)
+        error("""Rank deficiency (collinearity) detected with tolerance $(ϵ). Ensure that all 
+                 classes have sufficient observations to produce a full-rank covariance matrix.""")
+    end
+    broadcast!(/, UDVᵀ.Vt, UDVᵀ.Vt, D)
 end
+
+# Uses QR decomposition to whiten the implicit covariance matrix
+# Assumes H is row major, returns W
+function whitendata_qr!{T<:BlasReal}(H::Matrix{T})
+    n, m = size(H)
+    if n <= m
+        error("""Insufficient observations to produce a full rank covariance matrix. Collect more
+                 data or consider regularization.""")
+    end
+    ϵ = eps(T) * n * m * maximum(H)
+    QR = qrfact!(H, pivot=Val{True})
+    R = QR[:R]
+    if !all(diag(R) .>= ϵ)
+        error("""Rank deficiency (collinearity) detected with tolerance $(ϵ). Ensure that all 
+                 classes have sufficient observations to produce a full-rank covariance matrix.""")
+    end
+    W = LAPACK.trtri!('U', 'N', R)
+    UpperTriangular(broadcast!(/, W, W, sqrt(n-one(T))))
+end
+
+# Uses a Cholesky decomposition to whiten a covariance matrix
+# Regularization parameter γ shrinks towards average eigenvalue
+function whitencov_chol!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
+    ϵ = eps(T) * prod(size(Σ)) * maximum(Σ)
+    if !isnull(γ)
+        regularize!(Σ, get(γ))
+    end
+    if !all(diag(Σ) .>= ϵ)
+        error("""Rank deficiency (collinearity) detected with tolerance $(ϵ). Ensure that all 
+                 classes have sufficient observations to produce a full-rank covariance matrix.""")
+    end
+    UᵀU = cholfact(Σ, :U, Val{false})
+    U = triu!(UᵀU.factors)
+    UpperTriangular(LAPACK.trtri!('U', 'N', U))
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#=
 
 # sum(X .* X, 1)
 function dotrows!{T<:AbstractFloat}(X::Matrix{T}, xᵀx::Vector{T})
@@ -213,3 +315,4 @@ function whiten_cov!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
     all(Λ .>= ϵ) || error("Rank deficiency (collinearity) detected with tolerance $(ϵ).")
     scale!(V, 1 ./ sqrt(Λ))
 end
+=#

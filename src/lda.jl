@@ -3,6 +3,7 @@
 ==========================================================================#
 
 immutable ModelLDA{T<:BlasReal}
+    order::Union{Type{Val{:row}},Type{Val{:col}}}
     is_cda::Bool
     W::Matrix{T}       # Whitening matrix
     M::Matrix{T}       # Matrix of class means (one per row)
@@ -26,8 +27,27 @@ end
 #   M is matrix of class means (one per row)
 #   y is one-based vector of class IDs
 #   λ is nullable regularization parameter in [0,1]
-function lda!{T<:BlasReal,U<:Integer}(X::Matrix{T}, M::Matrix{T}, y::RefVector{U}, γ::Nullable{T})
-    H = center_classes!(X, M, y)
+function lda!{T<:BlasReal,U}(
+        order::Union{Type{Val{:row}},Type{Val{:col}}}
+        X::Matrix{T},
+        M::Matrix{T},
+        y::RefVector{U},
+        γ::Nullable{T}
+    )
+    H = centerclasses!(v, X, M, y)
+    if isnull(γ)
+        if order == Val{:col}
+            return transpose!(whitendata_qr!(transpose(H)))
+        else
+            return whitendata_qr!(H)
+        end
+    else
+        if order == Val{:col}
+            return whitendata_svd!(transpose(H), get(γ))
+        else
+            return transpose(whitendata_svd!(H, get(γ)))
+        end
+    end
     W = whiten_data!(H, γ)
 end
 
@@ -36,15 +56,16 @@ based on class identifier `y`."
 function lda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::AbstractVector{U};
-        M::Matrix{T} = class_means(X,RefVector(y)),
+        order::Union{Type{Val{:row}},Type{Val{:col}}} = Val{:row},
+        M::Matrix{T} = classmeans(order, X, RefVector(y)),
         gamma::Union{T,Nullable{T}} = Nullable{T}(),
         priors::Vector{T} = ones(T,maximum(y))/maximum(y)
     )
     all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
     γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
-    W = lda!(copy(X), M, isa(y,RefVector) ? y : RefVector(y), γ)
-    ModelLDA{T}(false, W, M, priors, γ)
+    W = lda!(order, copy(X), M, isa(y,RefVector) ? y : RefVector(y), γ)
+    ModelLDA{T}(order, false, W, M, priors, γ)
 end
 
 function cda!{T<:BlasReal,U<:Integer}(
