@@ -28,7 +28,7 @@ end
 #   y is one-based vector of class IDs
 #   λ is nullable regularization parameter in [0,1]
 function lda!{T<:BlasReal,U}(
-        order::Union{Type{Val{:row}},Type{Val{:col}}}
+        order::Union{Type{Val{:row}},Type{Val{:col}}},
         X::Matrix{T},
         M::Matrix{T},
         y::RefVector{U},
@@ -48,7 +48,6 @@ function lda!{T<:BlasReal,U}(
             return transpose(whitendata_svd!(H, get(γ)))
         end
     end
-    W = whiten_data!(H, γ)
 end
 
 doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model to the data in `X` 
@@ -69,6 +68,7 @@ function lda{T<:BlasReal,U<:Integer}(
 end
 
 function cda!{T<:BlasReal,U<:Integer}(
+         ::Type{Val{:row}},
         X::Matrix{T}, 
         M::Matrix{T}, 
         y::RefVector{U}, 
@@ -76,11 +76,12 @@ function cda!{T<:BlasReal,U<:Integer}(
         priors::Vector{T}
     )
     length(priors) == y.k  || error("Argument priors length does not match class count")
-    W_lda = lda!(X, M, y, γ)
+    W_lda = lda!(Val{:row}, X, M, y, γ)
     μ = vec(priors'M)
     H_mW = translate!(M, -μ) * W_lda
-    _U, D, Vᵀ  = LAPACK.gesdd!('A', H_mW)
-    W = W_lda * transpose(Vᵀ[1:min(y.k-1,size(X,2)),:])
+    UDVᵀ = svdfact!(H_mw)
+    Vᵀ = sub(UDVᵀ[:Vt], 1:min(y.k-1, size(X,2)), :)
+    W = A_mul_Bt(W_lda, Vᵀ)
 end
 
 doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant model to the data in

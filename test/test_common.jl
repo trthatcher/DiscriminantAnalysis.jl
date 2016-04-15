@@ -23,58 +23,47 @@ X = vcat([rand(n_k[i], p) .+ (10rand(1,p) .- 5) for i = 1:k]...)
 y = MOD.RefVector(y[σ])
 X = X[σ,:]
 
-info("Testing ", MOD.class_counts)
+info("Testing ", MOD.classcounts)
 for U in IntegerTypes
-    @test all(n_k .== MOD.class_counts(convert(MOD.RefVector{U}, y)))
+    @test all(n_k .== MOD.classcounts(convert(MOD.RefVector{U}, y)))
 end
 
-info("Testing ", MOD.class_totals)
+info("Testing ", MOD.classtotals)
 for T in FloatingPointTypes
     for U in IntegerTypes
         X_tmp = convert(Array{T}, X)
         y_tmp = convert(MOD.RefVector{U}, y)
-        @test_approx_eq MOD.class_totals(X_tmp, y_tmp) vcat([sum(X_tmp[y.ref .== i,:],1) for i = 1:k]...)
+        test_ans = vcat([sum(X_tmp[y.ref .== i,:],1) for i = 1:k]...)
+        @test_approx_eq MOD.classtotals(Val{:row}, X_tmp, y_tmp)  test_ans
+        @test_approx_eq MOD.classtotals(Val{:col}, X_tmp', y_tmp) test_ans'
+        @test_throws DimensionMismatch MOD.classtotals(Val{:row}, X_tmp', y_tmp)
+        @test_throws DimensionMismatch MOD.classtotals(Val{:col}, X_tmp, y_tmp)
     end
 end
 
-info("Testing ", MOD.class_means)
+info("Testing ", MOD.classmeans)
 for T in FloatingPointTypes
     for U in IntegerTypes
         X_tmp = convert(Array{T}, X)
-        y_tmp = convert(MOD.RefVector{U}, y)        
-        @test_approx_eq MOD.class_means(X_tmp, y_tmp) (MOD.class_totals(X_tmp, y_tmp) ./ n_k)
+        y_tmp = convert(MOD.RefVector{U}, y)
+        test_ans = MOD.classtotals(Val{:row}, X_tmp, y_tmp) ./ n_k
+        @test_approx_eq MOD.classmeans(Val{:row}, X_tmp,  y_tmp) test_ans
+        @test_approx_eq MOD.classmeans(Val{:col}, X_tmp', y_tmp) test_ans'
     end
 end
 
-info("Testing ", MOD.center_classes!)
+info("Testing ", MOD.centerclasses!)
 for T in FloatingPointTypes
     for U in IntegerTypes
         X_tmp = copy(convert(Array{T}, X))
         y_tmp = convert(MOD.RefVector{U}, y)
-        M = MOD.class_means(X_tmp, y_tmp)
-        @test_approx_eq MOD.center_classes!(copy(X_tmp), M, y_tmp) (X_tmp .- M[y_tmp, :])
+        M_tmp = MOD.classmeans(Val{:row}, X_tmp, y_tmp)
+        test_ans = X_tmp .- M_tmp[y_tmp, :]
+        @test_approx_eq MOD.centerclasses!(Val{:row}, copy(X_tmp), M_tmp, y_tmp) test_ans
+        @test_approx_eq MOD.centerclasses!(Val{:col}, copy(X_tmp)', M_tmp', y_tmp) test_ans'
     end
 end
 
-
-info("Testing ", MOD.translate!)
-for T in FloatingPointTypes
-    A = T[1 2;
-          3 4;
-          5 6]
-
-    b = T[1;
-          2]
-
-    c = T[1;
-          2;
-          3]
-
-    @test_approx_eq MOD.translate!(copy(A), one(T)) (A .+ one(T))
-    @test_approx_eq MOD.translate!(one(T), copy(A)) (A .+ one(T))
-    @test_approx_eq MOD.translate!(copy(A), b)      (A .+ b')
-    @test_approx_eq MOD.translate!(c, copy(A))      (A .+ c)
-end
 
 info("Testing ", MOD.regularize!)
 for T in FloatingPointTypes
@@ -82,13 +71,11 @@ for T in FloatingPointTypes
            4 5 6;
            7 8 9]
 
+    n = size(S1,1)
+
     S2 = T[7 8 9;
            8 3 6;
            1 7 4]
-
-    s = T[5;
-          7;
-          9]
 
     B = T[1 2;
           3 4;
@@ -100,55 +87,27 @@ for T in FloatingPointTypes
     @test_approx_eq MOD.regularize!(copy(S1), zero(T),  S2) S1
     @test_approx_eq MOD.regularize!(copy(S1), one(T),   S2) S2
     @test_approx_eq MOD.regularize!(copy(S1), one(T)/2, S2) (1-one(T)/2)*S1 + (one(T)/2)*S2
-
     @test_throws ErrorException MOD.regularize!(copy(S1), -one(T),  S2)
     @test_throws ErrorException MOD.regularize!(copy(S1), 2*one(T), S2)
-
     @test_throws DimensionMismatch MOD.regularize!(S1, one(T), B)
 
-    @test_approx_eq MOD.regularize!(copy(s), zero(T))  s
-    @test_approx_eq MOD.regularize!(copy(s), one(T))   zero(s) .+ mean(s)
-    @test_approx_eq MOD.regularize!(copy(s), one(T)/2) (1-one(T)/2)*s .+ (one(T)/2)*mean(s)
+    @test_approx_eq MOD.regularize!(copy(S1), zero(T)) S1
+    @test_approx_eq MOD.regularize!(copy(S1), one(T)) (trace(S1)/n)*eye(n)
+    @test_approx_eq MOD.regularize!(copy(S1), one(T)/2) (1-one(T)/2)*S1 + (one(T)/2)*(trace(S1)/n)*eye(n)
 end
 
-info("Testing ", MOD.symml)
-for T in FloatingPointTypes
-    A  = T[1 2 3;
-           4 5 6;
-           7 8 9]
-    AL = T[1 2 3;
-           2 5 6;
-           3 6 9]
-    AU = T[1 4 7;
-           4 5 8;
-           7 8 9]
-
-    B = MOD.symml(A)
-    @test eltype(B) == T
-    @test_approx_eq B AL
-end
-
-
-info("Testing ", MOD.dotrows)
+info("Testing ", MOD.dotvectors)
 for T in FloatingPointTypes
     A  = T[1 2 3;
            4 5 6;
            7 8 9;
            5 3 2]
 
-    @test_approx_eq MOD.dotrows(A) sum(A .* A,2)
+    @test_approx_eq MOD.dotvectors(Val{:row}, A) sum(A .* A,2)
+    @test_approx_eq MOD.dotvectors(Val{:col}, A) sum(A .* A,1)
 end
 
-info("Testing ", MOD.gramian)
-for T in FloatingPointTypes
-    A  = T[1 2 3;
-           4 5 6;
-           7 8 9;
-           5 3 2]
-    Ac = A .- mean(A,1)
-    @test_approx_eq MOD.gramian(Ac, one(T)/(size(A,1)-1)) cov(A)
-end
-
+#=
 info("Testing ", MOD.whiten_data!)
 for T in FloatingPointTypes
     X = T[1 0 0;
@@ -191,3 +150,4 @@ for T in FloatingPointTypes
 
     @test_throws ErrorException MOD.whiten_cov!(diagm([one(T); zero(T)]), Nullable{T}())
 end
+=#

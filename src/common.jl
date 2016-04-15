@@ -69,13 +69,14 @@ end
 function classmeans{T<:AbstractFloat}(::Type{Val{:row}}, X::Matrix{T}, y::RefVector)
     M   = classtotals(Val{:row}, X, y)
     n_k = classcounts(y)
-    scale!(one(T) ./ n_k, M)
+    broadcast!(/, M, M, n_k)
 end
 
 function classmeans{T<:AbstractFloat}(::Type{Val{:col}}, X::Matrix{T}, y::RefVector)
     M   = classtotals(Val{:col}, X, y)
     n_k = classcounts(y)
-    scale!(M, one(T) ./ n_k)
+    k = convert(Int64,y.k)
+    broadcast!(/, M, M, reshape(n_k, 1, k))
 end
 
 
@@ -88,11 +89,11 @@ function centerclasses!{T<:AbstractFloat}(
         M::Matrix{T}, 
         y::RefVector
     )
-    n, p = size(X)
-    size(M,2) == p   || throw(DimensionMismatch("X and M must have the same number of columns."))
-    size(M,1) == y.k || throw(DimensionMismatch("M should have as many rows as y has classes."))
-    for j = 1:p, i = 1:n
-        X[i,j] -= M[y[i],j]
+    n, m = size(X)
+    size(M,2) == size(X,2) || throw(DimensionMismatch("X and M must match in dimension 2."))
+    size(M,1) == y.k       || throw(DimensionMismatch("Class count must match dimension 1 of M."))
+    for I in CartesianRange(size(X))
+        X[I] -= M[y[I[1]],I[2]]
     end
     X
 end
@@ -103,14 +104,38 @@ function centerclasses!{T<:AbstractFloat}(
         M::Matrix{T}, 
         y::RefVector
     )
-    p, n = size(X)
-    size(M,2) == y.k || throw(DimensionMismatch("M should have as many columns as y has classes."))
-    size(M,1) == p   || throw(DimensionMismatch("X and M must have the same number of rows."))
-    for j = 1:p, i = 1:n
-        X[i,j] -= M[y[i],j]
+    n, m = size(X)
+    size(M,1) == n   || throw(DimensionMismatch("X and M must match in dimension 1."))
+    size(M,2) == y.k || throw(DimensionMismatch("Class count must match dimension 2 of M."))
+    for j = 1:m, i = 1:n
+        X[i,j] -= M[i,y[j]]
     end
     X
 end
+
+for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
+    @eval begin
+        function dotvectors!{T<:AbstractFloat}(
+                 ::Type{Val{$scheme}},
+                X::AbstractMatrix{T}, 
+                xᵀx::Vector{T}
+            )
+            if !(size(X,$dimension) == length(xᵀx))
+                errorstring = string("Dimension mismatch on dimension ", $dimension)
+                throw(DimensionMismatch(errorstring))
+            end
+            fill!(xᵀx, zero(T))
+            for I in CartesianRange(size(X))
+                xᵀx[I.I[$dimension]] += X[I]^2
+            end
+            xᵀx
+        end
+        function dotvectors{T<:AbstractFloat}(::Type{Val{$scheme}}, X::AbstractMatrix{T})
+            dotvectors!(Val{$scheme}, X, Array(T, size(X,$dimension)))
+        end
+    end
+end
+
 
 
 #== Regularization Functions ==#
@@ -137,24 +162,6 @@ function regularize!{T<:AbstractFloat}(S::Matrix{T}, γ::T)
         S[i,i] += γ*λ_avg
     end
     S
-end
-
-for (scheme, dimension) in ((:row, 1), (:col, 2))
-    function dotvectors!{T<:AbstractFloat}(
-             ::Type{Val{$scheme}},
-            X::AbstractMatrix{T}, 
-            xᵀx::Vector{T}
-        )
-        if !(size(X,$dimension) == length(xᵀx))
-            errorstring = string("Dimension mismatch on dimension ", $dimension)
-            throw(DimensionMismatch(errorstring))
-        end
-        fill!(xᵀx, zero(T))
-        for I in CartesianRange(size(X))
-            xᵀx[I.I[$dimension]] += X[I]^2
-        end
-        xᵀx
-    end
 end
 
 
