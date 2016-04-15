@@ -15,6 +15,7 @@ end
 # Class Functions
 
 n_k = [4; 7; 5]
+n = sum(n_k)
 k = length(n_k)
 p = 4
 y = MOD.RefVector(vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...), k)
@@ -61,6 +62,12 @@ for T in FloatingPointTypes
         test_ans = X_tmp .- M_tmp[y_tmp, :]
         @test_approx_eq MOD.centerclasses!(Val{:row}, copy(X_tmp), M_tmp, y_tmp) test_ans
         @test_approx_eq MOD.centerclasses!(Val{:col}, copy(X_tmp)', M_tmp', y_tmp) test_ans'
+
+        @test_throws DimensionMismatch MOD.centerclasses!(Val{:row}, X_tmp, Array(T,k,p+1), y_tmp)
+        @test_throws DimensionMismatch MOD.centerclasses!(Val{:col}, X_tmp', Array(T,p+1,k), y_tmp)
+
+        @test_throws DimensionMismatch MOD.centerclasses!(Val{:row}, X_tmp, Array(T,k+1,p), y_tmp)
+        @test_throws DimensionMismatch MOD.centerclasses!(Val{:col}, X_tmp', Array(T,p,k+1), y_tmp)
     end
 end
 
@@ -98,13 +105,13 @@ end
 
 info("Testing ", MOD.dotvectors)
 for T in FloatingPointTypes
-    A  = T[1 2 3;
-           4 5 6;
-           7 8 9;
-           5 3 2]
+    X_tmp = convert(Array{T}, X)
 
-    @test_approx_eq MOD.dotvectors(Val{:row}, A) sum(A .* A,2)
-    @test_approx_eq MOD.dotvectors(Val{:col}, A) sum(A .* A,1)
+    @test_approx_eq MOD.dotvectors(Val{:row}, X_tmp)  sum(X_tmp .* X_tmp,2)
+    @test_approx_eq MOD.dotvectors(Val{:col}, X_tmp') sum(X_tmp .* X_tmp,2)
+
+    @test_throws DimensionMismatch MOD.dotvectors!(Val{:row}, X_tmp,  Array(T, n+1))
+    @test_throws DimensionMismatch MOD.dotvectors!(Val{:col}, X_tmp', Array(T, n+1))
 end
 
 #=
