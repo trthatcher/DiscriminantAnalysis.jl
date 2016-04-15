@@ -39,82 +39,52 @@ function classcounts{T<:Integer}(y::RefVector{T})
     counts
 end
 
-function classtotals{T<:AbstractFloat}(::Type{Val{:row}}, X::Matrix{T}, y::RefVector)
-    n, p = size(X)
-    if length(y) != n
-        throw(DimensionMismatch("X and y must have the same number of rows."))
-    end
-    M = zeros(T, y.k, p)
-    for j = 1:p, i = 1:n
-        M[y[i],j] += X[i,j]
-    end
-    M
-end
-
-function classtotals{T<:AbstractFloat}(::Type{Val{:col}}, X::Matrix{T}, y::RefVector)
-    p, n = size(X)
-    if length(y) != n
-        throw(DimensionMismatch("X and y must have the same number of columns."))
-    end
-    M = zeros(T, p, y.k)
-    for j = 1:n, i = 1:p
-        M[i,y[j]] += X[i,j]
-    end
-    M
-end
-
-# Compute matrix of class means
-#   X is uncentered data matrix
-#   y is one-based vector of class IDs
-function classmeans{T<:AbstractFloat}(::Type{Val{:row}}, X::Matrix{T}, y::RefVector)
-    M   = classtotals(Val{:row}, X, y)
-    n_k = classcounts(y)
-    broadcast!(/, M, M, n_k)
-end
-
-function classmeans{T<:AbstractFloat}(::Type{Val{:col}}, X::Matrix{T}, y::RefVector)
-    M   = classtotals(Val{:col}, X, y)
-    n_k = classcounts(y)
-    k = convert(Int64,y.k)
-    broadcast!(/, M, M, reshape(n_k, 1, k))
-end
-
-
-# Center rows of X based on class mean in M
-#   X is uncentered data matrix
-#   M is matrix of class means (one per row)
-function centerclasses!{T<:AbstractFloat}(
-         ::Type{Val{:row}},
-        X::Matrix{T}, 
-        M::Matrix{T}, 
-        y::RefVector
-    )
-    n, m = size(X)
-    size(M,2) == size(X,2) || throw(DimensionMismatch("X and M must match in dimension 2."))
-    size(M,1) == y.k       || throw(DimensionMismatch("Class count must match dimension 1 of M."))
-    for I in CartesianRange(size(X))
-        X[I] -= M[y[I[1]],I[2]]
-    end
-    X
-end
-
-function centerclasses!{T<:AbstractFloat}(
-         ::Type{Val{:col}},
-        X::Matrix{T}, 
-        M::Matrix{T}, 
-        y::RefVector
-    )
-    n, m = size(X)
-    size(M,1) == n   || throw(DimensionMismatch("X and M must match in dimension 1."))
-    size(M,2) == y.k || throw(DimensionMismatch("Class count must match dimension 2 of M."))
-    for j = 1:m, i = 1:n
-        X[i,j] -= M[i,y[j]]
-    end
-    X
-end
-
 for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
+    M_ref  = dimension == 1 ? :(M[y[I[1]],I[2]])          : :(M[I[1],y[I[2]]])
+    M_init = dimension == 1 ? :(zeros(T, y.k, size(X,2))) : :(zeros(T, size(X,1), y.k))
+    w_k    = dimension == 1 ? :(reshape(n_k, k, 1))       : :(reshape(n_k, 1, k))
+    altdimension = dimension == 1 ? 2 : 1
     @eval begin
+        function classtotals{T<:AbstractFloat}(::Type{Val{$scheme}}, X::Matrix{T}, y::RefVector)
+            if length(y) != size(X, $dimension)
+                errorstring = string("Dimension ", $dimension, " of X must match length of y")
+                throw(DimensionMismatch(errorstring))
+            end
+            M = $M_init
+            for I in CartesianRange(size(X))
+                $M_ref += X[I]
+            end
+            M
+        end
+
+        function classmeans{T<:AbstractFloat}(::Type{Val{$scheme}}, X::Matrix{T}, y::RefVector)
+            M   = classtotals(Val{$scheme}, X, y)
+            n_k = classcounts(y)
+            k = convert(Int64, y.k)
+            broadcast!(/, M, M, $w_k)
+        end
+
+        function centerclasses!{T<:AbstractFloat}(
+                 ::Type{Val{$scheme}},
+                X::Matrix{T}, 
+                M::Matrix{T}, 
+                y::RefVector
+            )
+            n, m = size(X)
+            if !(size(M, $altdimension) == size(X, $altdimension))
+                errorstring = string("X and M must match in dimension ", $altdimension)
+                throw(DimensionMismatch(errorstring))
+            end
+            if !(y.k == size(M, $dimension))
+                errorstring = string("Class count must match dimension ", $dimension, " of M")
+                throw(DimensionMismatch(errorstring))
+            end
+            for I in CartesianRange(size(X))
+                X[I] -= $M_ref
+            end
+            X
+        end
+
         function dotvectors!{T<:AbstractFloat}(
                  ::Type{Val{$scheme}},
                 X::AbstractMatrix{T}, 
@@ -135,7 +105,6 @@ for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
         end
     end
 end
-
 
 
 #== Regularization Functions ==#
