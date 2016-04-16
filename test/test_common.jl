@@ -150,7 +150,10 @@ for T in FloatingPointTypes
     @test_approx_eq eye(T,3) (W'Σ)*W
 
     # Test degenerate case
-    H = eye(T,3) .- mean(eye(T,3))
+    H = eye(T,3)
+    @test_throws ErrorException MOD.whitendata_qr!(H)
+
+    H = ones(T,4,3)
     @test_throws ErrorException MOD.whitendata_qr!(H)
 end
 
