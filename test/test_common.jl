@@ -114,8 +114,7 @@ for T in FloatingPointTypes
     @test_throws DimensionMismatch MOD.dotvectors!(Val{:col}, X_tmp', Array(T, n+1))
 end
 
-#=
-info("Testing ", MOD.whiten_data!)
+info("Testing ", MOD.whitendata_svd!)
 for T in FloatingPointTypes
     X = T[1 0 0;
           0 1 0;
@@ -125,18 +124,18 @@ for T in FloatingPointTypes
     H = X .- μ
     Σ = H'H/(size(X,1)-1)
 
-    W = MOD.whiten_data!(copy(H), Nullable{T}())
-    @test_approx_eq eye(T,3) cov(X*W)
-
-    for λ in (convert(T, 0.25), convert(T, 0.5), convert(T, 0.75))
-        W = MOD.whiten_data!(copy(H), Nullable(λ))
-        @test_approx_eq eye(T,3) W'*((1-λ)*Σ + (λ*trace(Σ)/size(X,2))*I)*W
+    # Test full rank case
+    for λ in (zero(T), convert(T, 0.25), convert(T, 0.5), convert(T, 0.75), one(T))
+        W = MOD.whitendata_svd!(copy(H), λ)
+        @test_approx_eq eye(T,3) W*((1-λ)*Σ + (λ*trace(Σ)/size(X,2))*I)*(W')
     end
 
+    # Test degenerate case
     H = eye(T,3) .- mean(eye(T,3))
-    @test_throws ErrorException MOD.whiten_data!(H, Nullable{T}())
+    @test_throws ErrorException MOD.whitendata_svd!(H, zero(T))
 end
 
+#=
 info("Testing ", MOD.whiten_cov!)
 for T in FloatingPointTypes
     X = T[1 0 0;

@@ -136,27 +136,19 @@ end
 
 #== Whitening Functions ==#
 
-#=
-Random Vector: (assume centered)
-    Cov(x) = E(xxᵀ) = Σ  =>  Cov(Wᵀx) = WᵀCov(x)W = WᵀΣW
-    Σ = VD²Vᵀ
-    WᵀΣW = I  =>  WᵀVD²VᵀW = (DVᵀW)ᵀ(DVᵀW)
-
-Row-Major Data Matrix:
-    Cov(X) = XᵀX => Cov(XW) = WᵀXᵀXW
-
-Column-Major Data Matrix:
-    Cov(X) = XXᵀ => Cov(WX
-
-=#
+# Random Vector: Cov(x) = E(xxᵀ) = Σ  =>  Cov(Wᵀx) = WᵀCov(x)W = WᵀΣW
+# Row Major:     Cov(X) = XᵀX => Cov(XW) = WᵀXᵀXW
+# Column Major:  Cov(X) = XXᵀ => Cov(WX) = WXXᵀWᵀ
 
 # Uses SVD decomposition to whiten the implicit γ-regularized covariance matrix
-# Assumes H is row major, returns Wᵀ 
+#   Assumes H is row major, returns Wᵀ
+#   Σ = VD²Vᵀ
+#   WᵀΣW = I  =>  WᵀVD²VᵀW = (DVᵀW)ᵀ(DVᵀW)  =>  W = VD⁻¹
 function whitendata_svd!{T<:BlasReal}(H::Matrix{T}, γ::T)
     n, m = size(H)
     ϵ = eps(T) * n * m * maximum(H)
     UDVᵀ = svdfact!(H)
-    D = UDVᵀ.D
+    D = UDVᵀ.S
     λ_avg = zero(T)
     @inbounds for i in eachindex(D)
         D[i] = (D[i]^2)/(n-1)  # λi for Σ = H'H/(n-1)
