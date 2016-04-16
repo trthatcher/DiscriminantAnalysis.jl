@@ -135,8 +135,7 @@ for T in FloatingPointTypes
     @test_throws ErrorException MOD.whitendata_svd!(H, zero(T))
 end
 
-#=
-info("Testing ", MOD.whiten_cov!)
+info("Testing ", MOD.whitendata_qr!)
 for T in FloatingPointTypes
     X = T[1 0 0;
           0 1 0;
@@ -146,14 +145,36 @@ for T in FloatingPointTypes
     H = X .- μ
     Σ = H'H/(size(X,1)-1)
 
-    W = MOD.whiten_cov!(copy(Σ), Nullable{T}())
+    # Test full rank case
+    W = MOD.whitendata_qr!(copy(H))
+    @test_approx_eq eye(T,3) (W'Σ)*W
+
+    # Test degenerate case
+    H = eye(T,3) .- mean(eye(T,3))
+    @test_throws ErrorException MOD.whitendata_qr!(H)
+end
+
+info("Testing ", MOD.whitencov_chol!)
+for T in FloatingPointTypes
+    X = T[1 0 0;
+          0 1 0;
+          0 0 1;
+          5 5 3]
+    μ = mean(X,1)
+    H = X .- μ
+    Σ = H'H/(size(X,1)-1)
+
+    # Test unregularized, full rank case
+    W = MOD.whitencov_chol!(copy(Σ), Nullable{T}())
     @test_approx_eq eye(T,3) cov(X*W)
 
-    for λ in (convert(T, 0.25), convert(T, 0.5), convert(T, 0.75))
-        W = MOD.whiten_cov!(copy(Σ), Nullable(λ))
+    # Test regularized cases
+    for λ in (zero(T), convert(T, 0.25), convert(T, 0.5), convert(T, 0.75), one(T))
+        W = MOD.whitencov_chol!(copy(Σ), Nullable(λ))
         @test_approx_eq eye(T,3) W'*((1-λ)*Σ + (λ*trace(Σ)/size(X,2))*I)*W
     end
 
-    @test_throws ErrorException MOD.whiten_cov!(diagm([one(T); zero(T)]), Nullable{T}())
+    # Test degenerate case
+    @test_throws ErrorException MOD.whitencov_chol!(diagm([one(T); zero(T)]), Nullable{T}())
+    @test_throws ErrorException MOD.whitencov_chol!(diagm([one(T); zero(T)]), Nullable(zero(T)))
 end
-=#

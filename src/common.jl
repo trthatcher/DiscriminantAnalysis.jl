@@ -9,9 +9,15 @@ immutable RefVector{T<:Integer} <: AbstractVector{T}
     k::T
     function RefVector(ref::Vector{T}, k::T, check_integrity::Bool = true)
         if check_integrity
-            (refmin = minimum(ref)) >  0 || error("Class reference should begin at 1; value $refmin found")
-            (refmax = maximum(ref)) <= k || error("Class reference should not exceed $k; value $refmax found")
-            length(unique(ref)) == k || error("A class between 1 and $k is not referenced.")
+            if (refmin = minimum(ref)) <= 0
+                error("Class reference should begin at 1; value $refmin found")
+            end
+            if (refmax = maximum(ref)) > k
+                error("Class reference should not exceed $k; value $refmax found")
+            end
+            if length(unique(ref)) != k 
+                error("A class between 1 and $k is not referenced.")
+            end
         end
         new(copy(ref), k)
     end
@@ -142,8 +148,7 @@ end
 
 # Uses SVD decomposition to whiten the implicit γ-regularized covariance matrix
 #   Assumes H is row major, returns Wᵀ
-#   Σ = VD²Vᵀ
-#   WᵀΣW = I  =>  WᵀVD²VᵀW = (DVᵀW)ᵀ(DVᵀW)  =>  W = VD⁻¹
+#   Σ = VD²Vᵀ, WᵀΣW = I  =>  WᵀVD²VᵀW = (DVᵀW)ᵀ(DVᵀW)  =>  W = VD⁻¹
 function whitendata_svd!{T<:BlasReal}(H::Matrix{T}, γ::T)
     n, m = size(H)
     ϵ = eps(T) * n * m * maximum(H)
@@ -166,26 +171,29 @@ function whitendata_svd!{T<:BlasReal}(H::Matrix{T}, γ::T)
 end
 
 # Uses QR decomposition to whiten the implicit covariance matrix
-# Assumes H is row major, returns W
+#   Assumes H is row major, returns W
+#   X = QR  =>  Σ = RᵀR, WᵀΣW = I  =>  W = R⁻¹
 function whitendata_qr!{T<:BlasReal}(H::Matrix{T})
     n, m = size(H)
     if n <= m
-        error("""Insufficient observations to produce a full rank covariance matrix. Collect more
-                 data or consider regularization.""")
+        error("""Insufficient within-class observations to produce a full rank covariance matrix. 
+                 Collect more data or consider regularization.""")
     end
     ϵ = eps(T) * n * m * maximum(H)
-    QR = qrfact!(H, pivot=Val{True})
+    QR = qrfact!(H, Val{true})
     R = QR[:R]
-    if !all(diag(R) .>= ϵ)
+    if !all(abs(diag(R)) .>= ϵ)
         error("""Rank deficiency (collinearity) detected with tolerance $(ϵ). Ensure that all 
                  classes have sufficient observations to produce a full-rank covariance matrix.""")
     end
     W = LAPACK.trtri!('U', 'N', R)
-    UpperTriangular(broadcast!(/, W, W, sqrt(n-one(T))))
+    UpperTriangular(broadcast!(*, W, W, sqrt(n-one(T))))
 end
 
-# Uses a Cholesky decomposition to whiten a covariance matrix
-# Regularization parameter γ shrinks towards average eigenvalue
+# Uses a Cholesky decomposition to whiten a covariance matrix Regularization parameter γ shrinks 
+# towards average eigenvalue
+#   Returns W
+#   Σ = UᵀU, WᵀΣW = I  =>  W = U⁻¹
 function whitencov_chol!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
     ϵ = eps(T) * prod(size(Σ)) * maximum(Σ)
     if !isnull(γ)
