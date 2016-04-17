@@ -150,6 +150,7 @@ end
 #   Assumes H is row major, returns Wᵀ
 #   Σ = VD²Vᵀ, WᵀΣW = I  =>  WᵀVD²VᵀW = (DVᵀW)ᵀ(DVᵀW)  =>  W = VD⁻¹
 function whitendata_svd!{T<:BlasReal}(H::Matrix{T}, γ::T)
+    0 <= γ <= 1 || error("Parameter γ=$(γ) must be in the interval [0,1]")
     n, m = size(H)
     ϵ = eps(T) * n * m * maximum(H)
     UDVᵀ = svdfact!(H)
@@ -180,8 +181,8 @@ function whitendata_qr!{T<:BlasReal}(H::Matrix{T})
                  Collect more data or consider regularization.""")
     end
     ϵ = eps(T) * n * m * maximum(H)
-    QR = qrfact!(H, Val{true})
-    R = QR[:R]
+    QR = qrfact!(H, Val{false})
+    R = triu!(QR[:R])
     if !all(abs(diag(R)) .>= ϵ)
         error("""Rank deficiency (collinearity) detected with tolerance $(ϵ). Ensure that all 
                  classes have sufficient observations to produce a full-rank covariance matrix.""")
@@ -196,7 +197,7 @@ end
 #   Σ = UᵀU, WᵀΣW = I  =>  W = U⁻¹
 function whitencov_chol!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
     ϵ = eps(T) * prod(size(Σ)) * maximum(Σ)
-    if !isnull(γ)
+    if !isnull(γ) && get(γ) != 0
         regularize!(Σ, get(γ))
     end
     if !all(diag(Σ) .>= ϵ)

@@ -14,15 +14,24 @@ end
 
 # Class Functions
 
-n_k = [4; 7; 5]
-n = sum(n_k)
+n_k = [80; 100; 120]
 k = length(n_k)
-p = 4
+n = sum(n_k)
+p = 3
+
+y, X = sampledata(n_k, p)
+Z = vcat([sum(X[y.ref .== i,:],1) for i = 1:k]...)
+M = Z ./ n_k
+H = X .- M[y, :]
+Σ = H'H/(n-1)
+
+#=
 y = MOD.RefVector(vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...), k)
 X = vcat([rand(n_k[i], p) .+ (10rand(1,p) .- 5) for i = 1:k]...)
 σ = sortperm(rand(sum(n_k)))
 y = MOD.RefVector(y[σ])
 X = X[σ,:]
+=#
 
 info("Testing ", MOD.classcounts)
 for U in IntegerTypes
@@ -34,9 +43,9 @@ for T in FloatingPointTypes
     for U in IntegerTypes
         X_tmp = convert(Array{T}, X)
         y_tmp = convert(MOD.RefVector{U}, y)
-        test_ans = vcat([sum(X_tmp[y.ref .== i,:],1) for i = 1:k]...)
-        @test_approx_eq MOD.classtotals(Val{:row}, X_tmp, y_tmp)  test_ans
-        @test_approx_eq MOD.classtotals(Val{:col}, X_tmp', y_tmp) test_ans'
+        Z_tmp = convert(Array{T}, Z)
+        @test_approx_eq MOD.classtotals(Val{:row}, X_tmp, y_tmp)  Z_tmp
+        @test_approx_eq MOD.classtotals(Val{:col}, X_tmp', y_tmp) Z_tmp'
         @test_throws DimensionMismatch MOD.classtotals(Val{:row}, X_tmp', y_tmp)
         @test_throws DimensionMismatch MOD.classtotals(Val{:col}, X_tmp, y_tmp)
     end
@@ -47,9 +56,9 @@ for T in FloatingPointTypes
     for U in IntegerTypes
         X_tmp = convert(Array{T}, X)
         y_tmp = convert(MOD.RefVector{U}, y)
-        test_ans = MOD.classtotals(Val{:row}, X_tmp, y_tmp) ./ n_k
-        @test_approx_eq MOD.classmeans(Val{:row}, X_tmp,  y_tmp) test_ans
-        @test_approx_eq MOD.classmeans(Val{:col}, X_tmp', y_tmp) test_ans'
+        M_tmp = convert(Array{T}, M)
+        @test_approx_eq MOD.classmeans(Val{:row}, X_tmp,  y_tmp) M
+        @test_approx_eq MOD.classmeans(Val{:col}, X_tmp', y_tmp) M'
     end
 end
 
@@ -58,10 +67,10 @@ for T in FloatingPointTypes
     for U in IntegerTypes
         X_tmp = copy(convert(Array{T}, X))
         y_tmp = convert(MOD.RefVector{U}, y)
-        M_tmp = MOD.classmeans(Val{:row}, X_tmp, y_tmp)
-        test_ans = X_tmp .- M_tmp[y_tmp, :]
-        @test_approx_eq MOD.centerclasses!(Val{:row}, copy(X_tmp), M_tmp, y_tmp) test_ans
-        @test_approx_eq MOD.centerclasses!(Val{:col}, copy(X_tmp)', M_tmp', y_tmp) test_ans'
+        M_tmp = convert(Array{T}, M)
+        H_tmp = convert(Array{T}, H)
+        @test_approx_eq MOD.centerclasses!(Val{:row}, copy(X_tmp), M_tmp, y_tmp) H
+        @test_approx_eq MOD.centerclasses!(Val{:col}, copy(X_tmp)', M_tmp', y_tmp) H'
 
         @test_throws DimensionMismatch MOD.centerclasses!(Val{:row}, X_tmp, Array(T,k,p+1), y_tmp)
         @test_throws DimensionMismatch MOD.centerclasses!(Val{:col}, X_tmp', Array(T,p+1,k), y_tmp)
@@ -116,65 +125,52 @@ end
 
 info("Testing ", MOD.whitendata_svd!)
 for T in FloatingPointTypes
-    X = T[1 0 0;
-          0 1 0;
-          0 0 1;
-          5 5 3]
-    μ = mean(X,1)
-    H = X .- μ
-    Σ = H'H/(size(X,1)-1)
+    H_tmp = copy(convert(Array{T}, H))
+    Σ_tmp = copy(convert(Array{T}, Σ))
 
     # Test full rank case
     for λ in (zero(T), convert(T, 0.25), convert(T, 0.5), convert(T, 0.75), one(T))
-        W = MOD.whitendata_svd!(copy(H), λ)
-        @test_approx_eq eye(T,3) W*((1-λ)*Σ + (λ*trace(Σ)/size(X,2))*I)*(W')
+        W_tmp = MOD.whitendata_svd!(copy(H_tmp), λ)
+        S_tmp = (1-λ)*Σ_tmp + (λ*trace(Σ_tmp)/p)*I
+        @test_approx_eq eye(T,3) W_tmp*S_tmp*(W_tmp')
     end
 
     # Test degenerate case
-    H = eye(T,3) .- mean(eye(T,3))
-    @test_throws ErrorException MOD.whitendata_svd!(H, zero(T))
+    H_tmp = eye(T,3) .- mean(eye(T,3))
+    @test_throws ErrorException MOD.whitendata_svd!(copy(H_tmp), zero(T))
 end
 
 info("Testing ", MOD.whitendata_qr!)
 for T in FloatingPointTypes
-    X = T[1 0 0;
-          0 1 0;
-          0 0 1;
-          5 5 3]
-    μ = mean(X,1)
-    H = X .- μ
-    Σ = H'H/(size(X,1)-1)
+    H_tmp = copy(convert(Array{T}, H))
+    Σ_tmp = copy(convert(Array{T}, Σ))
 
     # Test full rank case
-    W = MOD.whitendata_qr!(copy(H))
-    @test_approx_eq eye(T,3) (W'Σ)*W
+    W_tmp = MOD.whitendata_qr!(copy(H_tmp))
+    @test_approx_eq eye(T,3) (W_tmp')*Σ_tmp*W_tmp
 
     # Test degenerate case
-    H = eye(T,3)
-    @test_throws ErrorException MOD.whitendata_qr!(H)
+    H_tmp = eye(T,3)
+    @test_throws ErrorException MOD.whitendata_qr!(copy(H_tmp))
 
-    H = ones(T,4,3)
-    @test_throws ErrorException MOD.whitendata_qr!(H)
+    H_tmp = ones(T,4,3)
+    @test_throws ErrorException MOD.whitendata_qr!(copy(H_tmp))
 end
 
 info("Testing ", MOD.whitencov_chol!)
 for T in FloatingPointTypes
-    X = T[1 0 0;
-          0 1 0;
-          0 0 1;
-          5 5 3]
-    μ = mean(X,1)
-    H = X .- μ
-    Σ = H'H/(size(X,1)-1)
+    H_tmp = copy(convert(Array{T}, H))
+    Σ_tmp = copy(convert(Array{T}, Σ))
 
     # Test unregularized, full rank case
-    W = MOD.whitencov_chol!(copy(Σ), Nullable{T}())
-    @test_approx_eq eye(T,3) cov(X*W)
+    W_tmp = MOD.whitencov_chol!(copy(Σ_tmp), Nullable{T}())
+    @test_approx_eq eye(T,3) (W_tmp')*Σ_tmp*W_tmp
 
     # Test regularized cases
     for λ in (zero(T), convert(T, 0.25), convert(T, 0.5), convert(T, 0.75), one(T))
-        W = MOD.whitencov_chol!(copy(Σ), Nullable(λ))
-        @test_approx_eq eye(T,3) W'*((1-λ)*Σ + (λ*trace(Σ)/size(X,2))*I)*W
+        W_tmp = MOD.whitencov_chol!(copy(Σ_tmp), Nullable(λ))
+        S_tmp = (1-λ)*Σ_tmp + (λ*trace(Σ_tmp)/p)*I
+        @test_approx_eq eye(T,3) (W_tmp')*S_tmp*W_tmp
     end
 
     # Test degenerate case

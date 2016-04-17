@@ -34,7 +34,7 @@ function lda!{T<:BlasReal,U}(
         y::RefVector{U},
         γ::Nullable{T}
     )
-    H = centerclasses!(v, X, M, y)
+    H = centerclasses!(order, X, M, y)
     if isnull(γ)
         if order == Val{:col}
             return transpose!(whitendata_qr!(transpose(H)))
