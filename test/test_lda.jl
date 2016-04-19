@@ -31,6 +31,30 @@ for T in FloatingPointTypes
     end
 end
 
+info("Testing ", MOD.cda!)
+for T in FloatingPointTypes
+    X_tmp = copy(convert(Matrix{T}, X))
+    M_tmp = copy(convert(Matrix{T}, M))
+    H_tmp = copy(convert(Matrix{T}, H))
+    Σ_tmp = copy(convert(Matrix{T}, Σ))
+    priors_tmp = copy(convert(Vector{T}, priors))
+
+    W_tmp = MOD.cda!(Val{:row}, copy(X_tmp), copy(M_tmp), y, Nullable{T}(), priors_tmp)
+    @test_approx_eq (W_tmp')*Σ_tmp*W_tmp eye(T,k-1)
+    W_tmp = MOD.cda!(Val{:col}, copy(X_tmp)', copy(M_tmp)', y, Nullable{T}(), priors_tmp)
+    @test_approx_eq W_tmp*Σ_tmp*(W_tmp') eye(T,k-1)
+
+    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
+        S_tmp = (1-γ)*Σ_tmp + (γ/p)*trace(Σ_tmp)*I  # gamma-regularization
+
+        W_tmp = MOD.cda!(Val{:row}, copy(X_tmp),  copy(M_tmp),  y, Nullable(γ), priors_tmp)
+        @test_approx_eq (W_tmp')*S_tmp*W_tmp eye(T,k-1)
+        W_tmp = MOD.cda!(Val{:col}, copy(X_tmp)', copy(M_tmp)', y, Nullable(γ), priors_tmp)
+        @test_approx_eq W_tmp*S_tmp*(W_tmp') eye(T,k-1)
+    end
+end
+
+
 #=
 info("Testing ", MOD.lda)
 for T in FloatingPointTypes
@@ -50,25 +74,6 @@ for T in FloatingPointTypes
         @test model.is_cda == false
         @test_approx_eq model.W W_tmp
         @test_approx_eq model.M M_tmp
-    end
-end
-
-info("Testing ", MOD.cda!)
-for T in FloatingPointTypes
-    X_tmp = copy(convert(Matrix{T}, X))
-    M_tmp = convert(Matrix{T}, M)
-    H_tmp = convert(Matrix{T}, H)
-    Σ_tmp = convert(Matrix{T}, Σ)
-    priors_tmp = convert(Vector{T}, priors)
-
-    W_tmp = MOD.cda!(copy(X_tmp), copy(M_tmp), y, Nullable{T}(), priors_tmp)
-    @test_approx_eq W_tmp'*Σ*W_tmp eye(T,k-1)
-
-    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
-        W_tmp = MOD.cda!(copy(X_tmp), copy(M_tmp), y, Nullable(γ), priors_tmp)
-        S = (1-γ)*Σ_tmp + (γ/p)*trace(Σ_tmp)*I  # gamma-regularization
-
-        @test_approx_eq W_tmp'*S*W_tmp eye(T,k-1)
     end
 end
 
