@@ -45,29 +45,38 @@ function classcounts{T<:Integer}(y::RefVector{T})
     counts
 end
 
-for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
-    M_ref  = dimension == 1 ? :(M[y[I[1]],I[2]])          : :(M[I[1],y[I[2]]])
-    M_init = dimension == 1 ? :(zeros(T, y.k, size(X,2))) : :(zeros(T, size(X,1), y.k))
-    w_k    = dimension == 1 ? :(reshape(n_k, k, 1))       : :(reshape(n_k, 1, k))
-    altdimension = dimension == 1 ? 2 : 1
+for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
+    isrowmajor = dim_obs == 1
+    dim_param  = isrowmajor ? 2 : 1
+
+    M_p = isrowmajor ? :p : :k
+    M_k = isrowmajor ? :k : :p
+    M_i = isrowmajor ? :(y[I[1]]) : :(I[1])
+    M_j = isrowmajor ? :(I[2])    : :(y[I[2]])
+
+    nk_k = isrowmajor ? :k : :1
+    nk_1 = isrowmajor ? :1 : :k
+
     @eval begin
         function classtotals{T<:AbstractFloat}(::Type{Val{$scheme}}, X::Matrix{T}, y::RefVector)
-            if length(y) != size(X, $dimension)
-                errorstring = string("Dimension ", $dimension, " of X must match length of y")
+            if length(y) != size(X, $dim_obs)
+                errorstring = string("Dimension ", $dim_obs, " of X must match length of y")
                 throw(DimensionMismatch(errorstring))
             end
-            M = $M_init
+            k = convert(Int64, y.k)
+            p = size(X, $dim_param)
+            M = zeros(T, $M_k, $M_p)
             for I in CartesianRange(size(X))
-                $M_ref += X[I]
+                M[$M_i,$M_j] += X[I]
             end
             M
         end
 
         function classmeans{T<:AbstractFloat}(::Type{Val{$scheme}}, X::Matrix{T}, y::RefVector)
-            M   = classtotals(Val{$scheme}, X, y)
-            n_k = classcounts(y)
-            k = convert(Int64, y.k)
-            broadcast!(/, M, M, $w_k)
+            M  = classtotals(Val{$scheme}, X, y)
+            nk = classcounts(y)
+            k  = convert(Int64, y.k)
+            broadcast!(/, M, M, reshape(nk, $nk_k, $nk_1))
         end
 
         function centerclasses!{T<:AbstractFloat}(
@@ -77,16 +86,16 @@ for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
                 y::RefVector
             )
             n, m = size(X)
-            if !(size(M, $altdimension) == size(X, $altdimension))
-                errorstring = string("X and M must match in dimension ", $altdimension)
+            if !(size(M, $dim_param) == size(X, $dim_param))
+                errorstring = string("X and M must match in dimension ", $dim_param)
                 throw(DimensionMismatch(errorstring))
             end
-            if !(y.k == size(M, $dimension))
-                errorstring = string("Class count must match dimension ", $dimension, " of M")
+            if !(y.k == size(M, $dim_obs))
+                errorstring = string("Class count must match dimension ", $dim_obs, " of M")
                 throw(DimensionMismatch(errorstring))
             end
             for I in CartesianRange(size(X))
-                X[I] -= $M_ref
+                X[I] -= M[$M_i,$M_j]
             end
             X
         end
@@ -96,18 +105,18 @@ for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
                 X::AbstractMatrix{T}, 
                 xᵀx::Vector{T}
             )
-            if !(size(X,$dimension) == length(xᵀx))
-                errorstring = string("Dimension mismatch on dimension ", $dimension)
+            if !(size(X,$dim_obs) == length(xᵀx))
+                errorstring = string("Dimension mismatch on dimension ", $dim_obs)
                 throw(DimensionMismatch(errorstring))
             end
             fill!(xᵀx, zero(T))
             for I in CartesianRange(size(X))
-                xᵀx[I.I[$dimension]] += X[I]^2
+                xᵀx[I.I[$dim_obs]] += X[I]^2
             end
             xᵀx
         end
         function dotvectors{T<:AbstractFloat}(::Type{Val{$scheme}}, X::AbstractMatrix{T})
-            dotvectors!(Val{$scheme}, X, Array(T, size(X,$dimension)))
+            dotvectors!(Val{$scheme}, X, Array(T, size(X, $dim_obs)))
         end
     end
 end
@@ -141,10 +150,10 @@ end
 
 
 #== Whitening Functions ==#
-
 # Random Vector: Cov(x) = E(xxᵀ) = Σ  =>  Cov(Wᵀx) = WᵀCov(x)W = WᵀΣW
 # Row Major:     Cov(X) = XᵀX => Cov(XW) = WᵀXᵀXW
 # Column Major:  Cov(X) = XXᵀ => Cov(WX) = WXXᵀWᵀ
+
 
 # Uses SVD decomposition to whiten the implicit γ-regularized covariance matrix
 #   Assumes H is row major, returns Wᵀ
@@ -171,6 +180,17 @@ function whitendata_svd!{T<:BlasReal}(H::Matrix{T}, γ::T)
     broadcast!(/, UDVᵀ.Vt, UDVᵀ.Vt, D)
 end
 
+# Returns right-multiplied W for row-based observations; Z = XW
+function whitendata_svd!{T<:BlasReal}(::Type{Val{:row}}, H::Matrix{T}, γ::T)
+    transpose(whitendata_svd!(H, γ))
+end
+
+# Returns left-multiplied W for column-based observations; Z = WX
+function whitendata_svd!{T<:BlasReal}(::Type{Val{:col}}, H::Matrix{T}, γ::T)
+    whitendata_svd!(transpose(H), γ)
+end
+
+
 # Uses QR decomposition to whiten the implicit covariance matrix
 #   Assumes H is row major, returns W
 #   X = QR  =>  Σ = RᵀR, WᵀΣW = I  =>  W = R⁻¹
@@ -191,7 +211,16 @@ function whitendata_qr!{T<:BlasReal}(H::Matrix{T})
     UpperTriangular(broadcast!(*, W, W, sqrt(n-one(T))))
 end
 
-# Uses a Cholesky decomposition to whiten a covariance matrix Regularization parameter γ shrinks 
+# Returns right-multiplied W for row-based observations; Z = XW
+whitendata_qr!{T<:BlasReal}(::Type{Val{:row}}, H::Matrix{T}) = whitendata_qr!(H)
+
+# Returns left-multiplied W for column-based observations; Z = WX
+function whitendata_qr!{T<:BlasReal}(::Type{Val{:col}}, H::Matrix{T}) 
+    transpose!(whitendata_qr!(transpose(H)))
+end
+
+
+# Uses a Cholesky decomposition to whiten a covariance matrix. Regularization parameter γ shrinks 
 # towards average eigenvalue
 #   Returns W
 #   Σ = UᵀU, WᵀΣW = I  =>  W = U⁻¹

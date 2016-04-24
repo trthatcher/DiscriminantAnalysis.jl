@@ -23,30 +23,83 @@ function show(io::IO, model::ModelLDA)
     println(io, model.M)
 end
 
-#   X in uncentered data matrix
-#   M is matrix of class means (one per row)
-#   y is one-based vector of class IDs
-#   λ is nullable regularization parameter in [0,1]
-function lda!{T<:BlasReal,U}(
-         ::Type{Val{:row}},
-        X::Matrix{T},
-        M::Matrix{T},
-        y::RefVector{U},
-        γ::Nullable{T}
-    )
-    H = centerclasses!(Val{:row}, X, M, y)
-    isnull(γ) ? whitendata_qr!(H) : transpose(whitendata_svd!(H, get(γ)))
-end
+for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
+    isrowmajor = dimension == 1
+    alt_dimension = isrowmajor ? 2 : 1
+    ## lda!
+    #whiten_qr  = isrowmajor ? :(whitendata_qr!(H)) :
+    #                          :(transpose!(whitendata_qr!(transpose(H))))
+    #whiten_svd = isrowmajor ? :(transpose(whitendata_svd!(H, get(γ)))) :
+    #                          :(whitendata_svd!(transpose(H), get(γ)))
+    ## cda!
+    mu    = isrowmajor ? :(priors'M)   : :(M'priors)
+    H_cda = isrowmajor ? :(Hm * W_lda) : :(W_lda * Hm)
+    W_cda = isrowmajor ? :(W_lda * transpose(Vᵀ)) : :(Vᵀ * W_lda)
+    @eval begin
+        # X in uncentered data matrix
+        # M is matrix of class means (one per row)
+        # y is one-based vector of class IDs
+        # λ is nullable regularization parameter in [0,1]
+        function lda!{T<:BlasReal,U}(
+                 ::Type{Val{$scheme}},
+                X::Matrix{T},
+                M::Matrix{T},
+                y::RefVector{U},
+                γ::Nullable{T}
+            )
+            H = centerclasses!(Val{$scheme}, X, M, y)
+            isnull(γ) ? whitendata_qr!(Val{$scheme}, H) : whitendata_svd!(Val{$scheme}, H, get(γ))
+        end
 
-function lda!{T<:BlasReal,U}(
-         ::Type{Val{:col}},
-        X::Matrix{T},
-        M::Matrix{T},
-        y::RefVector{U},
-        γ::Nullable{T}
-    )
-    H = centerclasses!(Val{:col}, X, M, y)
-    isnull(γ) ? transpose!(whitendata_qr!(transpose(H))) : whitendata_svd!(transpose(H), get(γ))
+        # same rules as lda! for common arguments
+        # priors is a vector of class weights
+        function cda!{T<:BlasReal,U}(
+                 ::Type{Val{$scheme}},
+                X::Matrix{T}, 
+                M::Matrix{T}, 
+                y::RefVector{U}, 
+                γ::Nullable{T},
+                priors::Vector{T}
+            )
+            k = convert(Int64, y.k)
+            k == length(priors) || error("Argument priors length does not match class count")
+            p = size(X, $alt_dimension)
+            W_lda = lda!(Val{$scheme}, X, M, y, γ)
+            Hm = broadcast!(-, M, M, $mu)
+            UDVᵀ = svdfact!($H_cda)
+            Vᵀ = (UDVᵀ[:Vt])[1:min(k-1,p),:] # sub(UDVᵀ[:Vt], 1:min(k-1,p), :)
+            $W_cda
+        end
+        #=
+        function discriminants_lda{T<:BlasReal}(
+                 ::Type{Val{$scheme}},
+                W::Matrix{T},
+                M::Matrix{T},
+                priors::Vector{T},
+                Z::Matrix{T}
+            )
+            n = size(Z,$dimension)
+            p = size(Z,$alt_dimension)
+            if size(W, $dimension) != m
+                throw(DimensionMismatch("Oops"))
+            end
+            d = size(W, $alt_dimension)
+            k = length(priors)
+            δ   = Array(T, n, k) # discriminant function values
+            H   = Array(T, n, p) # temporary array to prevent re-allocation k times
+            #Q   = Array(T, n, d) # Q := H*W
+            hᵀh = Array(T, n)    # diag(H'H)
+            for j = 1:k
+                broadcast!(-, H, Z, sub(M, j,:))
+                dotvectors!(Val{:row}, H*W, hᵀh)
+                for i = 1:n
+                    δ[i, j] = -hᵀh[i]/2 + log(priors[j])
+                end
+            end
+            δ
+        end
+        =#
+    end
 end
 
 doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model to the data in `X` 
@@ -66,40 +119,6 @@ function lda{T<:BlasReal,U<:Integer}(
     ModelLDA{T}(order, false, W, M, priors, γ)
 end
 
-function cda!{T<:BlasReal,U}(
-         ::Type{Val{:row}},
-        X::Matrix{T}, 
-        M::Matrix{T}, 
-        y::RefVector{U}, 
-        γ::Nullable{T},
-        priors::Vector{T}
-    )
-    k = convert(Int64, y.k)
-    k == length(priors) || error("Argument priors length does not match class count")
-    W_lda = lda!(Val{:row}, X, M, y, γ)
-    Hm = broadcast!(-, M, M, priors'M)
-    UDVᵀ = svdfact!(Hm * W_lda)
-    V = transpose((UDVᵀ[:Vt])[1:min(k-1,size(X,2)),:]) # sub(UDVᵀ[:Vt], 1:min(y.k-1, size(X,2)), :)
-    W = W_lda * V
-end
-
-function cda!{T<:BlasReal,U}(
-         ::Type{Val{:col}},
-        X::Matrix{T}, 
-        M::Matrix{T}, 
-        y::RefVector{U}, 
-        γ::Nullable{T},
-        priors::Vector{T}
-    )
-    k = convert(Int64, y.k)
-    k == length(priors) || error("Argument priors length does not match class count")
-    W_lda = lda!(Val{:col}, X, M, y, γ)
-    Hm = broadcast!(-, M, M, M'priors)
-    UDVᵀ = svdfact!(transpose(W_lda * Hm))
-    Vᵀ = (UDVᵀ[:Vt])[1:min(k-1,size(X,2)),:] # sub(UDVᵀ[:Vt], 1:min(y.k-1, size(X,2)), :)
-    W = Vᵀ * W_lda
-end
-
 doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant model to the data in
 `X` based on class identifier `y`."
 function cda{T<:BlasReal,U<:Integer}(
@@ -116,6 +135,59 @@ function cda{T<:BlasReal,U<:Integer}(
     ModelLDA{T}(true, W, M, priors, γ)
 end
 
+function discriminants_lda{T<:BlasReal}(
+         ::Type{Val{:row}},
+        W::Matrix{T},
+        M::Matrix{T},
+        priors::Vector{T},
+        Z::Matrix{T}
+    )
+    n, p = size(Z)
+    p == size(W, 1) || throw(DimensionMismatch("oops"))
+    d = size(W, 2)
+    k = length(priors)
+    δ   = Array(T, n, k) # discriminant function values
+    H   = Array(T, n, p) # temporary array to prevent re-allocation k times
+    #Q   = Array(T, n, d) # Q := H*W
+    hᵀh = Array(T, n)    # diag(H'H)
+    for j = 1:k
+        broadcast!(-, H, Z, sub(M, j,:))
+        dotvectors!(Val{:row}, H*W, hᵀh)
+        for i = 1:n
+            δ[i, j] = -hᵀh[i]/2 + log(priors[j])
+        end
+    end
+    δ
+end
+
+function discriminants_lda{T<:BlasReal}(
+         ::Type{Val{:col}},
+        W::Matrix{T},
+        M::Matrix{T},
+        priors::Vector{T},
+        Z::Matrix{T}
+    )
+    n = size(Z,1)
+    m = size(Z,2)
+    #p == size(W, 1) || throw(DimensionMismatch("oops"))
+    d = size(W, 2)
+    k = length(priors)
+    δ   = Array(T, n, k) # discriminant function values
+    H   = Array(T, n, p) # temporary array to prevent re-allocation k times
+    #Q   = Array(T, n, d) # Q := H*W
+    hᵀh = Array(T, n)    # diag(H'H)
+    for j = 1:k
+        broadcast!(-, H, Z, sub(M, j,:))
+        dotvectors!(Val{:row}, H*W, hᵀh)
+        for i = 1:n
+            δ[i, j] = -hᵀh[i]/2 + log(priors[j])
+        end
+    end
+    δ
+end
+
+
+#=
 function discriminants_lda{T<:BlasReal}(
         W::Matrix{T},
         M::Matrix{T},
@@ -139,9 +211,10 @@ function discriminants_lda{T<:BlasReal}(
     end
     δ
 end
+=#
 
 function discriminants{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
-    discriminants_lda(mod.W, mod.M, mod.priors, Z)
+    discriminants_lda(mod.order, mod.W, mod.M, mod.priors, Z)
 end
 
 function classify{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
