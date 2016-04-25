@@ -23,18 +23,40 @@ function show(io::IO, model::ModelLDA)
     println(io, model.M)
 end
 
-for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
-    isrowmajor = dimension == 1
-    alt_dimension = isrowmajor ? 2 : 1
-    ## lda!
-    #whiten_qr  = isrowmajor ? :(whitendata_qr!(H)) :
-    #                          :(transpose!(whitendata_qr!(transpose(H))))
-    #whiten_svd = isrowmajor ? :(transpose(whitendata_svd!(H, get(γ)))) :
-    #                          :(whitendata_svd!(transpose(H), get(γ)))
-    ## cda!
-    mu    = isrowmajor ? :(priors'M)   : :(M'priors)
-    H_cda = isrowmajor ? :(Hm * W_lda) : :(W_lda * Hm)
-    W_cda = isrowmajor ? :(W_lda * transpose(Vᵀ)) : :(Vᵀ * W_lda)
+# Extracts Fisher components
+function components!{T<:BlasReal}(
+         ::Type{Val{:row}},
+        W::AbstractMatrix{T},
+        M::Matrix{T},
+        w::Vector{T}
+    )
+    H = broadcast!(-, M, M, w'M)
+    UDVᵀ = svdfact!(H * W)
+    Vᵀ = (UDVᵀ[:Vt])[1:min(size(W,1)-1,size(W,2)),:]
+    W * transpose(Vᵀ)
+end
+
+function components!{T<:BlasReal}(
+         ::Type{Val{:col}},
+        W::AbstractMatrix{T},
+        M::Matrix{T}, 
+        w::Vector{T}
+    )
+    H = broadcast!(-, M, M, M'w)
+    UDVᵀ = svdfact!(W * H)
+    Vᵀ = (UDVᵀ[:Vt])[1:min(size(W,1)-1,size(W,2)),:]
+    Vᵀ * W
+end
+
+for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
+    isrowmajor = dim_obs == 1
+    dim_param = isrowmajor ? 2 : 1
+
+    D_i, D_j = isrowmajor ? (:i, :j) : (:j, :i)
+    D_n, D_k = isrowmajor ? (:n, :k) : (:k, :n)
+    H_n, H_p = isrowmajor ? (:n, :p) : (:p, :n)
+    W, H     = isrowmajor ? (:W, :H) : (:H, :W)
+    
     @eval begin
         # X in uncentered data matrix
         # M is matrix of class means (one per row)
@@ -63,14 +85,11 @@ for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
             )
             k = convert(Int64, y.k)
             k == length(priors) || error("Argument priors length does not match class count")
-            p = size(X, $alt_dimension)
-            W_lda = lda!(Val{$scheme}, X, M, y, γ)
-            Hm = broadcast!(-, M, M, $mu)
-            UDVᵀ = svdfact!($H_cda)
-            Vᵀ = (UDVᵀ[:Vt])[1:min(k-1,p),:] # sub(UDVᵀ[:Vt], 1:min(k-1,p), :)
-            $W_cda
+            p = size(X, $dim_param)
+            W = lda!(Val{$scheme}, X, M, y, γ)
+            components!(Val{$scheme}, W, M, priors)
         end
-        #=
+
         function discriminants_lda{T<:BlasReal}(
                  ::Type{Val{$scheme}},
                 W::Matrix{T},
@@ -78,27 +97,25 @@ for (scheme, dimension) in ((:(:row), 1), (:(:col), 2))
                 priors::Vector{T},
                 Z::Matrix{T}
             )
-            n = size(Z,$dimension)
-            p = size(Z,$alt_dimension)
-            if size(W, $dimension) != m
-                throw(DimensionMismatch("Oops"))
+            n = size(Z, $dim_obs)
+            p = size(Z, $dim_param)
+            if p != size(W, $dim_param)
+                throw(DimensionMismatch("Parameters of W and Z should match"))
             end
-            d = size(W, $alt_dimension)
+            d = size(W, $dim_param)
             k = length(priors)
-            δ   = Array(T, n, k) # discriminant function values
-            H   = Array(T, n, p) # temporary array to prevent re-allocation k times
-            #Q   = Array(T, n, d) # Q := H*W
-            hᵀh = Array(T, n)    # diag(H'H)
+            D   = Array(T, $D_n, $D_k) # discriminant function values
+            H   = Array(T, $H_n, $H_p) # temporary array to prevent re-allocation k times
+            hᵀh = Array(T, n)          # diag(H'H)
             for j = 1:k
-                broadcast!(-, H, Z, sub(M, j,:))
-                dotvectors!(Val{:row}, H*W, hᵀh)
+                broadcast!(-, H, Z, subvector(Val{$scheme}, M, j))
+                dotvectors!(Val{$scheme}, $H * $W, hᵀh)
                 for i = 1:n
-                    δ[i, j] = -hᵀh[i]/2 + log(priors[j])
+                    D[$D_i, $D_j] = -hᵀh[i]/2 + log(priors[j])
                 end
             end
-            δ
+            D
         end
-        =#
     end
 end
 
@@ -134,84 +151,6 @@ function cda{T<:BlasReal,U<:Integer}(
     W = cda!(copy(X), copy(M), RefVector(y), γ, priors)
     ModelLDA{T}(true, W, M, priors, γ)
 end
-
-function discriminants_lda{T<:BlasReal}(
-         ::Type{Val{:row}},
-        W::Matrix{T},
-        M::Matrix{T},
-        priors::Vector{T},
-        Z::Matrix{T}
-    )
-    n, p = size(Z)
-    p == size(W, 1) || throw(DimensionMismatch("oops"))
-    d = size(W, 2)
-    k = length(priors)
-    δ   = Array(T, n, k) # discriminant function values
-    H   = Array(T, n, p) # temporary array to prevent re-allocation k times
-    #Q   = Array(T, n, d) # Q := H*W
-    hᵀh = Array(T, n)    # diag(H'H)
-    for j = 1:k
-        broadcast!(-, H, Z, sub(M, j,:))
-        dotvectors!(Val{:row}, H*W, hᵀh)
-        for i = 1:n
-            δ[i, j] = -hᵀh[i]/2 + log(priors[j])
-        end
-    end
-    δ
-end
-
-function discriminants_lda{T<:BlasReal}(
-         ::Type{Val{:col}},
-        W::Matrix{T},
-        M::Matrix{T},
-        priors::Vector{T},
-        Z::Matrix{T}
-    )
-    n = size(Z,1)
-    m = size(Z,2)
-    #p == size(W, 1) || throw(DimensionMismatch("oops"))
-    d = size(W, 2)
-    k = length(priors)
-    δ   = Array(T, n, k) # discriminant function values
-    H   = Array(T, n, p) # temporary array to prevent re-allocation k times
-    #Q   = Array(T, n, d) # Q := H*W
-    hᵀh = Array(T, n)    # diag(H'H)
-    for j = 1:k
-        broadcast!(-, H, Z, sub(M, j,:))
-        dotvectors!(Val{:row}, H*W, hᵀh)
-        for i = 1:n
-            δ[i, j] = -hᵀh[i]/2 + log(priors[j])
-        end
-    end
-    δ
-end
-
-
-#=
-function discriminants_lda{T<:BlasReal}(
-        W::Matrix{T},
-        M::Matrix{T},
-        priors::Vector{T},
-        Z::Matrix{T}
-    )
-    n, p = size(Z)
-    p == size(W, 1) || throw(DimensionMismatch("oops"))
-    d = size(W, 2)
-    k = length(priors)
-    δ   = Array(T, n, k) # discriminant function values
-    H   = Array(T, n, p) # temporary array to prevent re-allocation k times
-    Q   = Array(T, n, d) # Q := H*W
-    hᵀh = Array(T, n)    # diag(H'H)
-    for j = 1:k
-        translate!(copy!(H, Z), -vec(M[j,:]))
-        dotrows!(BLAS.gemm!('N', 'N', one(T), H, W, zero(T), Q), hᵀh)
-        for i = 1:n
-            δ[i, j] = -hᵀh[i]/2 + log(priors[j])
-        end
-    end
-    δ
-end
-=#
 
 function discriminants{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
     discriminants_lda(mod.order, mod.W, mod.M, mod.priors, Z)

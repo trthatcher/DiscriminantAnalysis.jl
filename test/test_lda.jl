@@ -54,28 +54,29 @@ for T in FloatingPointTypes
     end
 end
 
-#=
 info("Testing ", MOD.discriminants_lda)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
     priors_tmp = convert(Vector{T}, priors)
 
-    model1 = lda(X_tmp, y, order=Val{:row})
-    model2 = lda(X_tmp, y, order=Val{:col})
-    δ = hcat(-[MOD.dotvectors(Val{:row}, (X_tmp .- M[i,:])*model.W)/2
+    model1 = lda(X_tmp,  y, order=Val{:row})
+    model2 = lda(X_tmp', y, order=Val{:col})
+    D = hcat(-[MOD.dotvectors(Val{:row}, (X_tmp .- M[i,:])*model1.W)/2
                 for i in eachindex(priors_tmp)]...) .+ log(priors_tmp)'
 
-    @test_approx_eq δ MOD.discriminants(model, X_tmp)
+    @test_approx_eq D  MOD.discriminants(model1, X_tmp)
+    @test_approx_eq D' MOD.discriminants(model2, X_tmp')
 
     for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
-        model = lda(X_tmp, y, gamma=γ)
-        δ = hcat(-[MOD.dotvectors(Val{:row}, (X_tmp .- M[i,:])*model.W)/2
+        model1 = lda(X_tmp,  y, order=Val{:row}, gamma=γ)
+        model2 = lda(X_tmp', y, order=Val{:col}, gamma=γ)
+        D = hcat(-[MOD.dotvectors(Val{:row}, (X_tmp .- M[i,:])*model1.W)/2
                    for i in eachindex(priors_tmp)]...) .+ log(priors_tmp)'
 
-        @test_approx_eq δ MOD.discriminants(model, X_tmp)
+        @test_approx_eq D  MOD.discriminants(model1, X_tmp)
+        @test_approx_eq D' MOD.discriminants(model2, X_tmp')
     end
 end
-=#
 
 
 #=

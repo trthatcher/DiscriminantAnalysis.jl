@@ -121,6 +121,9 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
     end
 end
 
+subvector(::Type{Val{:row}}, M::Matrix, j::Integer) = sub(M, j, :)
+subvector(::Type{Val{:col}}, M::Matrix, j::Integer) = sub(M, :, j)
+
 
 #== Regularization Functions ==#
 
