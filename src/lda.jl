@@ -14,13 +14,21 @@ end
 function show(io::IO, model::ModelLDA)
     println(io, (model.is_cda ? "Canonical" : "Linear") * " Discriminant Model")
     println(io, "\nRegularization Parameters:")
-    println(io, "γ = ", isnull(model.gamma) ? "n/a" : string(get(model.gamma)))
-    println(io, "\nPrior Probabilities:")
+    print(io, "    γ = ")
+    isnull(model.gamma) ? print(io, "N/A") : showcompact(get(model.gamma))
+    println(io, "\n\nClass Priors:")
     for i in eachindex(model.priors)
-        println(io, "Class ", i, ": ", model.priors[i])
+        print(io, "    Class ", i, " Probability: ")
+        showcompact(io, model.priors[i]*100)
+        println(io, "%")
     end
-    println(io, "\nGroup Means (one per row):")
-    println(io, model.M)
+    println(io, "\nClass Means:")
+    for j in eachindex(model.priors)
+        print(io, "    Class ", j, " Mean: [")
+        print(io, join([sprint(showcompact, v) for v in subvector(model.order, model.M, j)], ", "))
+        println(io, "]")
+    end
+    print(io, "\n")
 end
 
 # Extracts Fisher components
@@ -32,7 +40,8 @@ function components!{T<:BlasReal}(
     )
     H = broadcast!(-, M, M, w'M)
     UDVᵀ = svdfact!(H * W)
-    Vᵀ = (UDVᵀ[:Vt])[1:min(size(W,1)-1,size(W,2)),:]
+    d = min(size(M,2),size(M,1)-1)
+    Vᵀ = sub(UDVᵀ[:Vt], 1:d, :) # (UDVᵀ[:Vt])[1:d,:]
     W * transpose(Vᵀ)
 end
 
@@ -42,9 +51,10 @@ function components!{T<:BlasReal}(
         M::Matrix{T}, 
         w::Vector{T}
     )
-    H = broadcast!(-, M, M, M'w)
-    UDVᵀ = svdfact!(W * H)
-    Vᵀ = (UDVᵀ[:Vt])[1:min(size(W,1)-1,size(W,2)),:]
+    H = broadcast!(-, M, M, M*w)
+    UDVᵀ = svdfact!(transpose(W * H))
+    d = min(size(M,1), size(M,2)-1)
+    Vᵀ = sub(UDVᵀ[:Vt], 1:d, :) #(UDVᵀ[:Vt])[1:d,:]
     Vᵀ * W
 end
 
@@ -141,15 +151,16 @@ doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant mode
 function cda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::AbstractVector{U};
-        M::Matrix{T} = class_means(X,RefVector(y)),
-        priors::Vector{T} = ones(T, maximum(y))/maximum(y),
-        gamma::Union{T,Nullable{T}} = Nullable{T}()
+        order::Union{Type{Val{:row}},Type{Val{:col}}} = Val{:row},
+        M::Matrix{T} = classmeans(order, X, RefVector(y)),
+        gamma::Union{T,Nullable{T}} = Nullable{T}(),
+        priors::Vector{T} = ones(T, maximum(y))/maximum(y)
     )
     all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
     γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
-    W = cda!(copy(X), copy(M), RefVector(y), γ, priors)
-    ModelLDA{T}(true, W, M, priors, γ)
+    W = cda!(order, copy(X), copy(M), isa(y,RefVector) ? y : RefVector(y), γ, priors)
+    ModelLDA{T}(order, true, W, M, priors, γ)
 end
 
 function discriminants{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
