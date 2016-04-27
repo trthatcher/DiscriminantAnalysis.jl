@@ -71,7 +71,7 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
         # X in uncentered data matrix
         # M is matrix of class means (one per row)
         # y is one-based vector of class IDs
-        # λ is nullable regularization parameter in [0,1]
+        # γ is nullable regularization parameter in [0,1]
         function lda!{T<:BlasReal,U}(
                  ::Type{Val{$scheme}},
                 X::Matrix{T},

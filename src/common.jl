@@ -240,3 +240,14 @@ function whitencov_chol!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
     U = triu!(UᵀU.factors)
     UpperTriangular(LAPACK.trtri!('U', 'N', U))
 end
+
+# Returns right-multiplied W for row-based observations; Z = XW
+function whitencov_chol!{T<:BlasReal}(::Type{Val{:row}}, H::Matrix{T}, γ::Nullable{T})
+    whitencov_chol!(H, γ)
+end
+
+# Returns left-multiplied W for column-based observations; Z = WX
+function whitencov_chol!{T<:BlasReal}(::Type{Val{:col}}, H::Matrix{T}, γ::Nullable{T}) 
+    transpose!(whitencov_chol!(H, γ))
+end
+

@@ -145,4 +145,3 @@ end
 
 info("Testing ", MOD.ModelLDA)
 show(DevNull, lda(X, y, order=Val{:row}))
-show(DevNull, lda(X', y, order=Val{:col}))

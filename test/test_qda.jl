@@ -4,25 +4,48 @@ n = sum(n_k)
 p = 3
 
 y, X = sampledata(n_k, p)
-M = MOD.class_means(X, y)
-H = MOD.center_classes!(copy(X), M, y)
+M = MOD.classmeans(Val{:row}, X, y)
+H = MOD.centerclasses!(Val{:row}, copy(X), M, y)
 Σ = H'H/(n-1)
 priors = ones(k)./k
 
-info("Testing ", MOD.class_whiteners!)
+info("Testing ", MOD.classwhiteners!)
 for T in FloatingPointTypes
-    H_tmp = convert(Array{T}, H)
-    Σ_tmp = convert(Array{T}, Σ)
-    f_k = one(T)./(MOD.class_counts(y) .- 1)
-    Σ_k = Array{T,2}[MOD.gramian(H_tmp[y .== i,:], f_k[i]) for i = 1:y.k]
+    H_tmp = copy(convert(Array{T}, H))
+    Σ_tmp = copy(convert(Array{T}, Σ))
+    f_k = one(T)./(MOD.classcounts(y) .- 1)
+    Σ_k = Array{T,2}[scale!(MOD.gramian(Val{:row}, H_tmp[y .== i,:]), f_k[i]) for i = 1:y.k]
 
+    # Test null γ and λ
+    W_k = MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, Nullable{T}())
+    for i in eachindex(Σ_k)
+        @test_approx_eq eye(T,3) W_k[i]'*Σ_k[i]*W_k[i]
+    end
+    
+    # Test specified γ and null λ
+    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
+        W_k = MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, Nullable(γ))
+        for i in eachindex(Σ_k)
+            S = (1-γ)*Σ_k[i] + γ*trace(Σ_k[i])/p*I
+            @test_approx_eq eye(T,3) W_k[i]'*S*W_k[i]
+        end
+    end
+
+    #=
     for λ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
-        W_k = MOD.class_whiteners!(copy(H_tmp), y, Nullable{T}(), λ)
+        println(λ)
+        W_k = MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, Nullable{T}(), λ)
         for i in eachindex(Σ_k)
             S = (1-λ)*Σ_k[i] + λ*Σ_tmp
             @test_approx_eq eye(T,3) W_k[i]'*S*W_k[i]
         end
 
+        W_k = MOD.classwhiteners!(Val{:col}, copy(H_tmp)', y, Nullable{T}(), λ)
+        for i in eachindex(Σ_k)
+            S = (1-λ)*Σ_k[i] + λ*Σ_tmp
+            @test_approx_eq eye(T,3) W_k[i]*S*(W_k[i]')
+        end
+        
         for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
             W_k = MOD.class_whiteners!(copy(H_tmp), y, Nullable(γ), λ)
             for i in eachindex(Σ_k)
@@ -32,15 +55,10 @@ for T in FloatingPointTypes
             end
         end
     end
-    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
-        W_k = MOD.class_whiteners!(copy(H_tmp), y, Nullable(γ))
-        for i in eachindex(Σ_k)
-            S = (1-γ)*Σ_k[i] + γ*trace(Σ_k[i])/p*I
-            @test_approx_eq eye(T,3) W_k[i]'*S*W_k[i]
-        end
-    end
+    =#
 end
 
+#=
 info("Testing ", MOD.qda!)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
@@ -139,3 +157,4 @@ end
 
 info("Testing ", MOD.ModelQDA)
 show(DevNull, qda(X, y))
+=#

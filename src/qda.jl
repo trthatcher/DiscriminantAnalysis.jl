@@ -13,39 +13,64 @@ end
 function show(io::IO, model::ModelQDA)
     println(io, "Quadratic Discriminant Model")
     println(io, "\nRegularization Parameters:")
-    println(io, "γ = ", isnull(model.gamma) ? "n/a" : string(get(model.gamma)))
-    println(io, "λ = ", isnull(model.lambda) ? "n/a" : string(get(model.lambda)))
-    println(io, "\nPrior Probabilities:")
+    print(io, "    γ = ")
+    isnull(model.gamma) ? print(io, "N/A") : showcompact(get(model.gamma))
+    print(io, "    λ = ")
+    isnull(model.lambda) ? print(io, "N/A") : showcompact(get(model.lambda))
+    println(io, "\n\nClass Priors:")
     for i in eachindex(model.priors)
-        println(io, "Class ", i, ": ", model.priors[i])
+        print(io, "    Class ", i, " Probability: ")
+        showcompact(io, model.priors[i]*100)
+        println(io, "%")
     end
-    println(io, "\nGroup Means (one per row):")
-    println(io, model.M)
+    println(io, "\nClass Means:")
+    for j in eachindex(model.priors)
+        print(io, "    Class ", j, " Mean: [")
+        print(io, join([sprint(showcompact, v) for v in subvector(model.order, model.M, j)], ", "))
+        println(io, "]")
+    end
+    print(io, "\n")
 end
 
+gramian{T<:BlasReal}(::Type{Val{:row}}, X::Matrix{T}) = X'X
+gramian{T<:BlasReal}(::Type{Val{:col}}, X::Matrix{T}) = At_mul_B(X,X)
+
 # λ-regularized QDA - require full covariance matrices
-function class_whiteners!{T<:BlasReal,U<:Integer}(
+function classwhiteners!{T<:BlasReal,U}(
+         ::Type{Val{:row}},
         H::Matrix{T},
         y::RefVector{U}, 
         γ::Nullable{T},
         λ::T
     )
-    f_k = one(T) ./ (class_counts(y) .- one(U))
-    Σ_k = Matrix{T}[gramian(H[y .== i,:], f_k[i]) for i = 1:y.k]
-    Σ   = gramian(H, one(T)/(size(H,1)-1))
-    for S in Σ_k 
+    k = convert(Int64, y.k)
+    f_k = sqrt(one(T) ./ (classcounts(y) .- one(T)))
+    Σ_k = Matrix{T}[scale!(gramian(Val{:row}, H[y .== i,:]), f_k[i]) for i = 1:k]
+    Σ   = scale!(gramian(Val{:row}, H), sqrt(one(T)/(size(H,1)-1)))
+    for S in Σ_k
         regularize!(S, λ, Σ)
-        whiten_cov!(S, γ)
+        whitencov_chol!(Val{:row}, S, γ)
     end
     Σ_k
 end
 
 # No λ-regularization - only need data matrices
-function class_whiteners!{T<:BlasReal,U<:Integer}(H::Matrix{T}, y::RefVector{U}, γ::Nullable{T})
-    Matrix{T}[whiten_data!(H[y .== i,:], γ) for i = 1:y.k]
+function classwhiteners!{T<:BlasReal,U}(
+         ::Type{Val{:row}},
+        H::Matrix{T},
+        y::RefVector{U},
+        γ::Nullable{T}
+    )
+    k = convert(Int64, y.k)
+    if isnull(γ)
+        Matrix{T}[whitendata_qr!(Val{:row}, H[y .== i,:]) for i = 1:k]
+    else
+        Matrix{T}[whitendata_svd!(Val{:row}, H[y .== i, :], get(γ)) for i = 1:k]
+    end
 end
 
-function qda!{T<:BlasReal,U<:Integer}(
+function qda!{T<:BlasReal,U}(
+         ::Type{Val{:row}},
         X::Matrix{T}, 
         M::Matrix{T}, 
         y::RefVector{U}, 
@@ -53,7 +78,11 @@ function qda!{T<:BlasReal,U<:Integer}(
         λ::Nullable{T}
     )
     H = center_classes!(X, M, y)
-    isnull(λ) ? class_whiteners!(H, y, γ) : class_whiteners!(H, y, γ, get(λ))
+    if isnull(λ)
+        class_whiteners!(Val{:row}, H, y, γ)
+    else
+        class_whiteners!(Val{:row}, H, y, γ, get(λ))
+    end
 end
 
 doc"`qda(X, y; M, lambda, gamma, priors)` Fits a regularized quadratic discriminant model to the 
