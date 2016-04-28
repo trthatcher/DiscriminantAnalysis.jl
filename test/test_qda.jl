@@ -14,12 +14,12 @@ for T in FloatingPointTypes
     H_tmp = copy(convert(Array{T}, H))
     Σ_tmp = copy(convert(Array{T}, Σ))
     f_k = one(T)./(MOD.classcounts(y) .- 1)
-    Σ_k = Array{T,2}[scale!(MOD.gramian(Val{:row}, H_tmp[y .== i,:]), f_k[i]) for i = 1:y.k]
+    Σ_k = Array{T,2}[MOD.covmatrix(Val{:row}, H_tmp[y .== i,:]) for i = 1:y.k]
 
     # Test null γ and λ
     W_k = MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, Nullable{T}())
     for i in eachindex(Σ_k)
-        @test_approx_eq eye(T,3) W_k[i]'*Σ_k[i]*W_k[i]
+        @test_approx_eq eye(T,p) W_k[i]'*Σ_k[i]*W_k[i]
     end
     
     # Test specified γ and null λ
@@ -27,7 +27,16 @@ for T in FloatingPointTypes
         W_k = MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, Nullable(γ))
         for i in eachindex(Σ_k)
             S = (1-γ)*Σ_k[i] + γ*trace(Σ_k[i])/p*I
-            @test_approx_eq eye(T,3) W_k[i]'*S*W_k[i]
+            @test_approx_eq eye(T,p) W_k[i]'*S*W_k[i]
+        end
+    end
+
+    # Test specified λ and null γ
+    for λ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
+        W_k = MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, Nullable{T}(), λ)
+        for i in eachindex(Σ_k)
+            S_tmp = (1-λ)*Σ_k[i] + λ*Σ_tmp
+            @test_approx_eq eye(T,p) (W_k[i]')*S_tmp*W_k[i]
         end
     end
 

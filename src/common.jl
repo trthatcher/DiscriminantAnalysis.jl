@@ -236,18 +236,18 @@ function whitencov_chol!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
         error("""Rank deficiency (collinearity) detected with tolerance $(ϵ). Ensure that all 
                  classes have sufficient observations to produce a full-rank covariance matrix.""")
     end
-    UᵀU = cholfact(Σ, :U, Val{false})
+    UᵀU = cholfact!(Σ, :U, Val{false})
     U = triu!(UᵀU.factors)
     UpperTriangular(LAPACK.trtri!('U', 'N', U))
 end
 
 # Returns right-multiplied W for row-based observations; Z = XW
-function whitencov_chol!{T<:BlasReal}(::Type{Val{:row}}, H::Matrix{T}, γ::Nullable{T})
-    whitencov_chol!(H, γ)
+function whitencov_chol!{T<:BlasReal}(::Type{Val{:row}}, Σ::Matrix{T}, γ::Nullable{T})
+    whitencov_chol!(Σ, γ)
 end
 
 # Returns left-multiplied W for column-based observations; Z = WX
-function whitencov_chol!{T<:BlasReal}(::Type{Val{:col}}, H::Matrix{T}, γ::Nullable{T}) 
-    transpose!(whitencov_chol!(H, γ))
+function whitencov_chol!{T<:BlasReal}(::Type{Val{:col}}, Σ::Matrix{T}, γ::Nullable{T}) 
+    transpose!(whitencov_chol!(Σ, γ))
 end
 

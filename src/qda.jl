@@ -32,8 +32,11 @@ function show(io::IO, model::ModelQDA)
     print(io, "\n")
 end
 
-gramian{T<:BlasReal}(::Type{Val{:row}}, X::Matrix{T}) = X'X
-gramian{T<:BlasReal}(::Type{Val{:col}}, X::Matrix{T}) = At_mul_B(X,X)
+function covmatrix{T<:BlasReal}(::Type{Val{:row}}, H::Matrix{T})
+    n = size(H,1)
+    Σ = H'H
+    broadcast!(/, Σ, Σ, n-1)
+end
 
 # λ-regularized QDA - require full covariance matrices
 function classwhiteners!{T<:BlasReal,U}(
@@ -44,9 +47,8 @@ function classwhiteners!{T<:BlasReal,U}(
         λ::T
     )
     k = convert(Int64, y.k)
-    f_k = sqrt(one(T) ./ (classcounts(y) .- one(T)))
-    Σ_k = Matrix{T}[scale!(gramian(Val{:row}, H[y .== i,:]), f_k[i]) for i = 1:k]
-    Σ   = scale!(gramian(Val{:row}, H), sqrt(one(T)/(size(H,1)-1)))
+    Σ_k = Matrix{T}[covmatrix(Val{:row}, H[y .== i,:]) for i = 1:k]
+    Σ   = covmatrix(Val{:row}, H)
     for S in Σ_k
         regularize!(S, λ, Σ)
         whitencov_chol!(Val{:row}, S, γ)
