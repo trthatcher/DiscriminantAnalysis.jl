@@ -109,9 +109,6 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
             )
             n = size(Z, $dim_obs)
             p = size(Z, $dim_param)
-            if p != size(W, $dim_param)
-                throw(DimensionMismatch("Parameters of W and Z should match"))
-            end
             d = size(W, $dim_param)
             k = length(priors)
             D   = Array(T, $D_n, $D_k) # discriminant function values

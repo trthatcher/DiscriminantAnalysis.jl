@@ -38,52 +38,94 @@ function covmatrix{T<:BlasReal}(::Type{Val{:row}}, H::Matrix{T})
     broadcast!(/, Σ, Σ, n-1)
 end
 
-# λ-regularized QDA - require full covariance matrices
-function classwhiteners!{T<:BlasReal,U}(
-         ::Type{Val{:row}},
-        H::Matrix{T},
-        y::RefVector{U}, 
-        γ::Nullable{T},
-        λ::T
-    )
-    k = convert(Int64, y.k)
-    Σ_k = Matrix{T}[covmatrix(Val{:row}, H[y .== i,:]) for i = 1:k]
-    Σ   = covmatrix(Val{:row}, H)
-    for S in Σ_k
-        regularize!(S, λ, Σ)
-        whitencov_chol!(Val{:row}, S, γ)
-    end
-    Σ_k
+function covmatrix{T<:BlasReal}(::Type{Val{:col}}, H::Matrix{T})
+    n = size(H,2)
+    Σ = A_mul_Bt(H, H)
+    broadcast!(/, Σ, Σ, n-1)
 end
 
-# No λ-regularization - only need data matrices
-function classwhiteners!{T<:BlasReal,U}(
-         ::Type{Val{:row}},
-        H::Matrix{T},
-        y::RefVector{U},
-        γ::Nullable{T}
-    )
-    k = convert(Int64, y.k)
-    if isnull(γ)
-        Matrix{T}[whitendata_qr!(Val{:row}, H[y .== i,:]) for i = 1:k]
-    else
-        Matrix{T}[whitendata_svd!(Val{:row}, H[y .== i, :], get(γ)) for i = 1:k]
-    end
-end
+for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
+    isrowmajor = dim_obs == 1
+    dim_param = isrowmajor ? 2 : 1
 
-function qda!{T<:BlasReal,U}(
-         ::Type{Val{:row}},
-        X::Matrix{T}, 
-        M::Matrix{T}, 
-        y::RefVector{U}, 
-        γ::Nullable{T},
-        λ::Nullable{T}
-    )
-    H = center_classes!(X, M, y)
-    if isnull(λ)
-        class_whiteners!(Val{:row}, H, y, γ)
-    else
-        class_whiteners!(Val{:row}, H, y, γ, get(λ))
+    H_i  = isrowmajor ? :(H[y .== i, :]) : :(H[:, y .== i])
+    i, j = isrowmajor ? (:i, :j) : (:j, :i)
+    n, p = isrowmajor ? (:n, :p) : (:p, :n)
+    W_j, H = isrowmajor ? (:(W_k[j]), :H) : (:H, :(W_k[j]))
+
+
+    @eval begin
+        # λ-regularized QDA - require full covariance matrices
+        function classwhiteners!{T<:BlasReal,U}(
+                 ::Type{Val{$scheme}},
+                H::Matrix{T},
+                y::RefVector{U}, 
+                γ::Nullable{T},
+                λ::T
+            )
+            k = convert(Int64, y.k)
+            Σ_k = Matrix{T}[covmatrix(Val{$scheme}, $H_i) for i = 1:k]
+            Σ   = covmatrix(Val{$scheme}, H)
+            for S in Σ_k
+                regularize!(S, λ, Σ)
+                whitencov_chol!(Val{$scheme}, S, γ)
+            end
+            Σ_k
+        end
+
+        # No λ-regularization - only need data matrices
+        function classwhiteners!{T<:BlasReal,U}(
+                 ::Type{Val{$scheme}},
+                H::Matrix{T},
+                y::RefVector{U},
+                γ::Nullable{T}
+            )
+            k = convert(Int64, y.k)
+            if isnull(γ)
+                Matrix{T}[whitendata_qr!(Val{$scheme}, $H_i) for i = 1:k]
+            else
+                Matrix{T}[whitendata_svd!(Val{$scheme}, $H_i, get(γ)) for i = 1:k]
+            end
+        end
+
+        function qda!{T<:BlasReal,U}(
+                 ::Type{Val{$scheme}},
+                X::Matrix{T}, 
+                M::Matrix{T}, 
+                y::RefVector{U}, 
+                γ::Nullable{T},
+                λ::Nullable{T}
+            )
+            H = centerclasses!(Val{$scheme}, X, M, y)
+            if isnull(λ)
+                classwhiteners!(Val{$scheme}, H, y, γ)
+            else
+                classwhiteners!(Val{$scheme}, H, y, γ, get(λ))
+            end
+        end
+
+        function discriminants_qda{T<:BlasReal}(
+                W_k::Vector{Matrix{T}},
+                M::Matrix{T},
+                priors::Vector{T},
+                Z::Matrix{T}
+            )
+            n = size(Z, $dim_obs)
+            p = size(Z, $dim_param)
+            k = length(priors)
+            D   = Array(T, $n, $p) # discriminant function values
+            H   = Array(T, $n, $p) # temporary array to prevent re-allocation k times
+            hᵀh = Array(T, n)      # diag(H'H)
+            for j = 1:k
+                broadcast!(-, H, Z, subvector(Val{$scheme}, M, j))
+                dotvectors!(Val{$scheme}, $H * $W_j, hᵀh)
+                for i = 1:n
+                    D[$i, $j] = -hᵀh[i]/2 + log(priors[j])
+                end
+            end
+            D
+        end
+
     end
 end
 
@@ -105,6 +147,7 @@ function qda{T<:BlasReal,U<:Integer}(
     ModelQDA{T}(W_k, M, priors, γ, λ)
 end
 
+#=
 function discriminants_qda{T<:BlasReal}(
         W_k::Vector{Matrix{T}},
         M::Matrix{T},
@@ -129,6 +172,7 @@ function discriminants_qda{T<:BlasReal}(
     end
     δ
 end
+=#
 
 doc"`discriminants(Model, Z)` Uses `Model` on input `Z` to product the class discriminants."
 function discriminants{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T})

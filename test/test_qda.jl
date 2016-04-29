@@ -40,23 +40,10 @@ for T in FloatingPointTypes
         end
     end
 
-    #=
+    # Test specified λ and γ
     for λ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
-        println(λ)
-        W_k = MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, Nullable{T}(), λ)
-        for i in eachindex(Σ_k)
-            S = (1-λ)*Σ_k[i] + λ*Σ_tmp
-            @test_approx_eq eye(T,3) W_k[i]'*S*W_k[i]
-        end
-
-        W_k = MOD.classwhiteners!(Val{:col}, copy(H_tmp)', y, Nullable{T}(), λ)
-        for i in eachindex(Σ_k)
-            S = (1-λ)*Σ_k[i] + λ*Σ_tmp
-            @test_approx_eq eye(T,3) W_k[i]*S*(W_k[i]')
-        end
-        
         for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
-            W_k = MOD.class_whiteners!(copy(H_tmp), y, Nullable(γ), λ)
+            W_k = MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, Nullable(γ), λ)
             for i in eachindex(Σ_k)
                 S = (1-λ)*Σ_k[i] + λ*Σ_tmp
                 S = (1-γ)*S + γ*trace(S)/p*I
@@ -64,49 +51,27 @@ for T in FloatingPointTypes
             end
         end
     end
-    =#
 end
 
-#=
 info("Testing ", MOD.qda!)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
-    M_tmp = convert(Matrix{T}, M)
-    H_tmp = convert(Matrix{T}, H)
+    M_tmp = copy(convert(Matrix{T}, M))
+    H_tmp = copy(convert(Matrix{T}, H))
 
-    γ = Nullable{T}()
-    λ = Nullable{T}()
-    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, γ, λ)
-    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, γ)
-    for i in eachindex(W_k)
-        @test_approx_eq W_k[i] W_k_tmp[i]
+    for γ in (Nullable{T}(), Nullable(convert(T,0.5)))
+        for λ in (Nullable{T}(), Nullable(convert(T,0.5)))
+            W_k = MOD.qda!(Val{:row}, copy(X_tmp), copy(M_tmp), y, γ, λ)
+            W_k_tmp = isnull(λ) ? MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, γ) :
+                                  MOD.classwhiteners!(Val{:row}, copy(H_tmp), y, γ, get(λ))
+            for i in eachindex(W_k)
+                @test_approx_eq W_k[i] W_k_tmp[i]
+            end
+        end
     end
-
-    γ = Nullable(one(T)/3)
-    λ = Nullable{T}()
-    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, γ, λ)
-    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, γ)
-    for i in eachindex(W_k)
-        @test_approx_eq W_k[i] W_k_tmp[i]
-    end
-
-    γ = Nullable{T}()
-    λ = Nullable(one(T)/3)
-    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, γ, λ)
-    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, γ, get(λ))
-    for i in eachindex(W_k)
-        @test_approx_eq W_k[i] W_k_tmp[i]
-    end
-
-    γ = Nullable{T}(one(T)/3)
-    λ = Nullable(one(T)/3)
-    W_k = MOD.qda!(copy(X_tmp), copy(M_tmp), y, γ, λ)
-    W_k_tmp = MOD.class_whiteners!(copy(H_tmp), y, γ, get(λ))
-    for i in eachindex(W_k)
-        @test_approx_eq W_k[i] W_k_tmp[i]
-    end
-
 end
+
+#=
 
 info("Testing ", MOD.qda)
 for T in FloatingPointTypes
