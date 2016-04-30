@@ -195,7 +195,7 @@ end
 
 
 # Uses QR decomposition to whiten the implicit covariance matrix
-#   Assumes H is row major, returns W
+#   Assumes H is row major, returns W (upper triangular)
 #   X = QR  =>  Σ = RᵀR, WᵀΣW = I  =>  W = R⁻¹
 function whitendata_qr!{T<:BlasReal}(H::Matrix{T})
     n, m = size(H)
@@ -211,21 +211,21 @@ function whitendata_qr!{T<:BlasReal}(H::Matrix{T})
                  classes have sufficient observations to produce a full-rank covariance matrix.""")
     end
     W = LAPACK.trtri!('U', 'N', R)
-    UpperTriangular(broadcast!(*, W, W, sqrt(n-one(T))))
+    broadcast!(*, W, W, sqrt(n-one(T)))
 end
 
 # Returns right-multiplied W for row-based observations; Z = XW
-whitendata_qr!{T<:BlasReal}(::Type{Val{:row}}, H::Matrix{T}) = whitendata_qr!(H)
+whitendata_qr!{T<:BlasReal}(::Type{Val{:row}}, H::Matrix{T}) = UpperTriangular(whitendata_qr!(H))
 
 # Returns left-multiplied W for column-based observations; Z = WX
-function whitendata_qr!{T<:BlasReal}(::Type{Val{:col}}, H::Matrix{T}) 
-    transpose!(whitendata_qr!(transpose(H)))
+function whitendata_qr!{T<:BlasReal}(::Type{Val{:col}}, H::Matrix{T})
+    LowerTriangular(transpose(whitendata_qr!(transpose(H))))
 end
 
 
 # Uses a Cholesky decomposition to whiten a covariance matrix. Regularization parameter γ shrinks 
 # towards average eigenvalue
-#   Returns W
+#   Returns W (upper triangle)
 #   Σ = UᵀU, WᵀΣW = I  =>  W = U⁻¹
 function whitencov_chol!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
     ϵ = eps(T) * prod(size(Σ)) * maximum(Σ)
@@ -238,16 +238,15 @@ function whitencov_chol!{T<:BlasReal}(Σ::Matrix{T}, γ::Nullable{T})
     end
     UᵀU = cholfact!(Σ, :U, Val{false})
     U = triu!(UᵀU.factors)
-    UpperTriangular(LAPACK.trtri!('U', 'N', U))
+    LAPACK.trtri!('U', 'N', U)
 end
 
 # Returns right-multiplied W for row-based observations; Z = XW
 function whitencov_chol!{T<:BlasReal}(::Type{Val{:row}}, Σ::Matrix{T}, γ::Nullable{T})
-    whitencov_chol!(Σ, γ)
+    UpperTriangular(whitencov_chol!(Σ, γ))
 end
 
 # Returns left-multiplied W for column-based observations; Z = WX
 function whitencov_chol!{T<:BlasReal}(::Type{Val{:col}}, Σ::Matrix{T}, γ::Nullable{T}) 
-    transpose!(whitencov_chol!(Σ, γ))
+    LowerTriangular(transpose(whitencov_chol!(Σ, γ)))
 end
-

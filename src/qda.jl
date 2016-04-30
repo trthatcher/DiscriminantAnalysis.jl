@@ -64,11 +64,11 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
                 λ::T
             )
             k = convert(Int64, y.k)
-            Σ_k = Matrix{T}[covmatrix(Val{$scheme}, $H_i) for i = 1:k]
+            Σ_k = AbstractMatrix{T}[covmatrix(Val{$scheme}, $H_i) for i = 1:k]
             Σ   = covmatrix(Val{$scheme}, H)
-            for S in Σ_k
-                regularize!(S, λ, Σ)
-                whitencov_chol!(Val{$scheme}, S, γ)
+            for i in eachindex(Σ_k)
+                regularize!(Σ_k[i], λ, Σ)
+                Σ_k[i] = whitencov_chol!(Val{$scheme}, Σ_k[i], γ)
             end
             Σ_k
         end
@@ -82,9 +82,9 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
             )
             k = convert(Int64, y.k)
             if isnull(γ)
-                Matrix{T}[whitendata_qr!(Val{$scheme}, $H_i) for i = 1:k]
+                AbstractMatrix{T}[whitendata_qr!(Val{$scheme}, $H_i) for i = 1:k]
             else
-                Matrix{T}[whitendata_svd!(Val{$scheme}, $H_i, get(γ)) for i = 1:k]
+                AbstractMatrix{T}[whitendata_svd!(Val{$scheme}, $H_i, get(γ)) for i = 1:k]
             end
         end
 
@@ -134,6 +134,7 @@ data in `X` based on class identifier `y`."
 function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::AbstractVector{U};
+        order::Union{Type{Val{:row}},Type{Val{:col}}} = Val{:row},
         M::Matrix{T} = class_means(X,RefVector(y)),
         gamma::Union{T,Nullable{T}}  = Nullable{T}(),
         lambda::Union{T,Nullable{T}} = Nullable{T}(),
@@ -141,10 +142,10 @@ function qda{T<:BlasReal,U<:Integer}(
     )
     all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
-    γ = isa(gamma,  Nullable) ? deepcopy(gamma)  : Nullable(gamma)
-    λ = isa(lambda, Nullable) ? deepcopy(lambda) : Nullable(lambda)
-    W_k = qda!(copy(X), M, isa(y,RefVector) ? y : RefVector(y), γ, λ)
-    ModelQDA{T}(W_k, M, priors, γ, λ)
+    γ = isa(gamma,  Nullable) ? gamma  : Nullable(gamma)
+    λ = isa(lambda, Nullable) ? lambda : Nullable(lambda)
+    W_k = qda!(order, copy(X), M, isa(y,RefVector) ? y : RefVector(y), γ, λ)
+    ModelQDA{T}(order, W_k, M, priors, γ, λ)
 end
 
 #=
