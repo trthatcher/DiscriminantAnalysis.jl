@@ -79,6 +79,10 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
                 y::RefVector{U},
                 γ::Nullable{T}
             )
+            p = size(X, $dim_param)
+            p >= 1 || throw(DimensionMismatch("Must have at least one parameter"))
+            n = size(X, $dim_obs)
+            n >= 2 || throw(DimensionMismatch("Must have at least two observations"))
             H = centerclasses!(Val{$scheme}, X, M, y)
             isnull(γ) ? whitendata_qr!(Val{$scheme}, H) : whitendata_svd!(Val{$scheme}, H, get(γ))
         end
@@ -87,17 +91,18 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
         # priors is a vector of class weights
         function cda!{T<:BlasReal,U}(
                  ::Type{Val{$scheme}},
-                X::Matrix{T}, 
-                M::Matrix{T}, 
-                y::RefVector{U}, 
+                X::Matrix{T},
+                M::Matrix{T},
+                y::RefVector{U},
                 γ::Nullable{T},
                 priors::Vector{T}
             )
             k = convert(Int64, y.k)
-            k == length(priors) || error("Argument priors length does not match class count")
-            p = size(X, $dim_param)
+            if k != length(priors)
+                throw(DimensionMismatch("Argument priors length does not match class count"))
+            end
             W = lda!(Val{$scheme}, X, M, y, γ)
-            components!(Val{$scheme}, W, M, priors)
+            size(X, $dim_param) < k ? W : components!(Val{$scheme}, W, M, priors)
         end
 
         function discriminants_lda{T<:BlasReal}(
