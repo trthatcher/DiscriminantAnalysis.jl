@@ -21,7 +21,7 @@ function boundary(model, xrange, yrange, is_quad::Bool = false)
              vec(Float64[y for x in xrange, y in yrange]))
     δ = DiscriminantAnalysis.discriminants(model, is_quad ? hcat(Z, Z.^2, Z[:,1] .* Z[:,2]) : Z)
     Z = reshape(δ[:,1] - δ[:,2], length(xrange), length(yrange))
-    Contour.coordinates(Contour.contours(xrange, yrange, Z, 0.0)[1].lines[1])
+    Contour.coordinates(Contour.lines(Contour.contour(xrange,yrange,Z,0.0))[1])
 end
 
 limits(X::Matrix) = (minimum(X[:,1]), maximum(X[:,1]), minimum(X[:,2]), maximum(X[:,2]))

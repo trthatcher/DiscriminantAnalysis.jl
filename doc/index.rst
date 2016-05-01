@@ -175,9 +175,11 @@ LDA), a whitening matrix :math:`\mathbf{W}_k` is computed such that:
     = \mathbf{W}_k^{\intercal} \mathbf{\Sigma}_k \mathbf{W}_k
     = I \quad \implies \quad \mathbf{W} = \mathbf{\Sigma}^{-1/2}
 
-This is accomplished using an eigendecomposition of the covariance matrix or a
-singular value decomposition of the data matrix. We can then use the 
-transformation:
+This is accomplished using an QR or singular value decomposition of the data 
+matrix where possible. When the covariance matrix must be calculated directly,
+the Cholesky decomposition is used to whiten the data instead.
+
+Once the whitening matrix has been computed, we can then use the transformation:
 
 .. math::
 
@@ -203,23 +205,35 @@ Package Interface
 
 .. note::
 
-    In DiscriminantAnalysis.jl, the input data matrix ``X`` is assumed to be 
-    stored in the same format as a `design matrix`_ in statistics. In other 
-    words, each row of ``X`` corresponds to an observation vector:
+    Data matrices may be stored in either row-major or column-major ordering of
+    observations. Row-major ordering means each row corresponds to an
+    observation and column-major ordering means each column corresponds to an
+    observation:
 
-    .. math:: \mathbf{X} = 
+    .. math:: \mathbf{X}_{row} = 
                   \begin{bmatrix} 
                       \leftarrow \mathbf{x}_1 \rightarrow \\ 
                       \leftarrow \mathbf{x}_2 \rightarrow \\ 
                       \vdots \\ 
                       \leftarrow \mathbf{x}_n \rightarrow 
                    \end{bmatrix}
-    
-    This differs from other Julia packages.
+              \qquad
+              \mathbf{X}_{col} = 
+                  \begin{bmatrix}
+                      \uparrow & \uparrow & & \uparrow  \\
+                      \mathbf{x}_1 & \mathbf{x}_2 & \cdots & \mathbf{x_n} \\
+                      \downarrow & \downarrow & & \downarrow
+                  \end{bmatrix}
+
+    In DiscriminantAnalysis.jl, the input data matrix ``X`` is assumed to be 
+    stored in the same format as a `design matrix`_ in statistics (row-major) by
+    default. This ordering can be switched between row-major and column-major by
+    setting the ``order`` argument to ``Val{:row}`` and ``Val{:col}``,
+    respectively.
 
 .. _design matrix: https://en.wikipedia.org/wiki/Design_matrix
 
-.. function:: lda(X, y [; M, priors, gamma])
+.. function:: lda(X, y [; order, M, priors, gamma])
 
     Fit a regularized linear discriminant model based on data ``X`` and class 
     identifier ``y``. ``X`` must be a matrix of floats and ``y`` must be a 
@@ -248,24 +262,25 @@ Package Interface
     object returned by the ``lda`` function:
 
     ========== =====================================================
-    Argument   Description
+    Field      Description
     ========== =====================================================
     ``is_cda`` Boolean value; the model is a CDA model if ``true``
     ``W``      The whitening matrix used to decorrelate observations
+    ``order``  The ordering of observations in the data matrix
     ``M``      A matrix of class means; one per row
     ``priors`` A vector of class prior probabilities
     ``gamma``  The regularization parameter as defined above.
     ========== =====================================================
 
 
-.. function:: cda(X, y [; M, priors, gamma])
+.. function:: cda(X, y [; order, M, priors, gamma])
 
     Fit a regularized canonical discriminant model based on data ``X`` and class 
     identifier ``y``. The CDA model is identical to an LDA model, except that
     dimensionality reduction is included in the whitening transformation matrix.
     See the ``lda`` documentation for information on the arguments.
 
-.. function:: qda(X, y [; M, priors, gamma, lambda])
+.. function:: qda(X, y [; order, M, priors, gamma, lambda])
 
     Fit a regularized quadratic discriminant model based on data ``X`` and class 
     identifier ``y``. ``X`` must be a matrix of floats and ``y`` must be a 
@@ -300,9 +315,10 @@ Package Interface
     object returned by the ``qda`` function:
 
     ========== =====================================================
-    Argument   Description
+    Field      Description
     ========== =====================================================
     ``W_k``    The vector of whitening matrices (one per class)
+    ``order``  The ordering of observations in the data matrix
     ``M``      A matrix of class means; one per row
     ``priors`` A vector of class prior probabilities
     ``gamma``  The regularization parameter as defined above.
