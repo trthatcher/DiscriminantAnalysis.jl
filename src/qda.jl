@@ -49,10 +49,11 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
     isrowmajor = dim_obs == 1
     dim_param = isrowmajor ? 2 : 1
 
-    H_i  = isrowmajor ? :(H[y .== i, :]) : :(H[:, y .== i])
-    i, j = isrowmajor ? (:i, :j) : (:j, :i)
-    n, p = isrowmajor ? (:n, :p) : (:p, :n)
-    W_j, H = isrowmajor ? (:(W_k[j]), :H) : (:H, :(W_k[j]))
+    H_i      = isrowmajor ? :(H[y .== i, :]) : :(H[:, y .== i])
+    _ij, _ji = isrowmajor ? (:i, :j) : (:j, :i)  # Swapped variables for row and column ordering
+    _nk, _kn = isrowmajor ? (:n, :k) : (:k, :n)
+    _np, _pn = isrowmajor ? (:n, :p) : (:p, :n)
+    W_j, H   = isrowmajor ? (:(W_k[j]), :H) : (:H, :(W_k[j]))
 
     @eval begin
         # λ-regularized QDA - require full covariance matrices
@@ -105,6 +106,7 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
         end
 
         function discriminants_qda{T<:BlasReal}(
+                 ::Type{Val{$scheme}},
                 W_k::Vector{Matrix{T}},
                 M::Matrix{T},
                 priors::Vector{T},
@@ -113,14 +115,14 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
             n = size(Z, $dim_obs)
             p = size(Z, $dim_param)
             k = length(priors)
-            D   = Array(T, $n, $p)  # discriminant function values
-            H   = Array(T, $n, $p)  # temporary array to prevent re-allocation k times
-            hᵀh = Array(T, n)       # diag(H'H)
+            D   = Array(T, $_nk, $_kn)  # discriminant function values
+            H   = Array(T, $_np, $_pn)  # temporary array to prevent re-allocation k times
+            hᵀh = Array(T, n)           # diag(H'H)
             for j = 1:k
                 broadcast!(-, H, Z, subvector(Val{$scheme}, M, j))
                 dotvectors!(Val{$scheme}, $H * $W_j, hᵀh)
                 for i = 1:n
-                    D[$i, $j] = -hᵀh[i]/2 + log(priors[j])
+                    D[$_ij, $_ji] = -hᵀh[i]/2 + log(priors[j])
                 end
             end
             D
@@ -128,8 +130,8 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
     end
 end
 
-doc"`qda(X, y; M, lambda, gamma, priors)` Fits a regularized quadratic discriminant model to the 
-data in `X` based on class identifier `y`."
+doc"`qda(X, y; order, M, lambda, gamma, priors)` Fits a regularized quadratic discriminant model to
+the data in `X` based on class identifier `y`."
 function qda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::AbstractVector{U};
@@ -149,10 +151,10 @@ end
 
 doc"`discriminants(Model, Z)` Uses `Model` on input `Z` to product the class discriminants."
 function discriminants{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T})
-    discriminants_qda(mod.W_k, mod.M, mod.priors, Z)
+    discriminants_qda(mod.order, mod.W_k, mod.M, mod.priors, Z)
 end
 
 doc"`classify(Model, Z)` Uses `Model` on input `Z`."
 function classify{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T})
-    mapslices(indmax, discriminants(mod, Z), 2)
+    mapslices(indmax, discriminants(mod, Z), mod.order == Val{:row} ? 2 : 1)
 end

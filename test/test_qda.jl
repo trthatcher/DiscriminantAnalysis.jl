@@ -80,27 +80,32 @@ for order in (:row, :col)
     end
 end
 
-
-#=
-
 info("Testing ", MOD.discriminants_qda)
 for T in FloatingPointTypes
     X_tmp = copy(convert(Matrix{T}, X))
     priors_tmp = convert(Vector{T}, priors)
 
-    model = qda(X_tmp, y)
-    Z2 = hcat([MOD.dotrows((X_tmp .- M[i,:])*model.W_k[i]) for i in eachindex(priors_tmp)]...)
-    δ = -Z2/2 .+ log(priors_tmp)'
-    @test_approx_eq δ MOD.discriminants(model, X_tmp)
+    model1 = qda(X_tmp,  y, order=Val{:row})
+    model2 = qda(X_tmp', y, order=Val{:col})
+    D = hcat(-[MOD.dotvectors(Val{:row}, (X_tmp .- M[i,:])*model1.W_k[i])/2
+                for i in eachindex(priors_tmp)]...) .+ log(priors_tmp)'
 
-    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
-        model = qda(X_tmp, y)
-        Z2 = hcat([MOD.dotrows((X_tmp .- M[i,:])*model.W_k[i]) for i in eachindex(priors_tmp)]...)
-        δ = -Z2/2 .+ log(priors_tmp)'
-        @test_approx_eq δ MOD.discriminants(model, X_tmp)
+    @test_approx_eq D  MOD.discriminants(model1, X_tmp)
+    @test_approx_eq D' MOD.discriminants(model2, X_tmp')
+end
+
+info("Testing ", MOD.classify)
+for order in (:row, :col)
+    for T in FloatingPointTypes
+        isrowmajor = order == :row
+        X_tst = isrowmajor ? copy(convert(Matrix{T}, X)) : transpose(convert(Matrix{T}, X))
+        priors_tst = convert(Vector{T}, priors)
+
+        model = qda(X_tst, y, order=Val{order})
+        D1 = mapslices(indmax, MOD.discriminants(model, X_tst), isrowmajor ? 2 : 1)
+        @test D1 == MOD.classify(model, X_tst)
     end
 end
 
 info("Testing ", MOD.ModelQDA)
 show(DevNull, qda(X, y))
-=#

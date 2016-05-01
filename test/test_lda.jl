@@ -126,15 +126,23 @@ for T in FloatingPointTypes
 
     @test_approx_eq D  MOD.discriminants(model1, X_tmp)
     @test_approx_eq D' MOD.discriminants(model2, X_tmp')
+end
 
-    for γ in (zero(T), convert(T, 0.25), convert(T, 0.75), one(T))
-        model1 = lda(X_tmp,  y, order=Val{:row}, gamma=γ)
-        model2 = lda(X_tmp', y, order=Val{:col}, gamma=γ)
-        D = hcat(-[MOD.dotvectors(Val{:row}, (X_tmp .- M[i,:])*model1.W)/2
-                   for i in eachindex(priors_tmp)]...) .+ log(priors_tmp)'
+info("Testing ", MOD.classify)
+for order in (:row, :col)
+    for T in FloatingPointTypes
+        isrowmajor = order == :row
+        X_tst = isrowmajor ? copy(convert(Matrix{T}, X)) : transpose(convert(Matrix{T}, X))
+        priors_tst = convert(Vector{T}, priors)
 
-        @test_approx_eq D  MOD.discriminants(model1, X_tmp)
-        @test_approx_eq D' MOD.discriminants(model2, X_tmp')
+        model1 = lda(X_tst, y, order=Val{order})
+        model2 = cda(X_tst, y, order=Val{order})
+
+        D1 = mapslices(indmax, MOD.discriminants(model1, X_tst), isrowmajor ? 2 : 1)
+        D2 = mapslices(indmax, MOD.discriminants(model2, X_tst), isrowmajor ? 2 : 1)
+
+        @test D1 == MOD.classify(model1, X_tst)
+        @test D2 == MOD.classify(model2, X_tst)
     end
 end
 

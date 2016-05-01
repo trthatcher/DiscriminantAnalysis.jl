@@ -62,9 +62,9 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
     isrowmajor = dim_obs == 1
     dim_param = isrowmajor ? 2 : 1
 
-    D_i, D_j = isrowmajor ? (:i, :j) : (:j, :i)
-    D_n, D_k = isrowmajor ? (:n, :k) : (:k, :n)
-    H_n, H_p = isrowmajor ? (:n, :p) : (:p, :n)
+    _ij, _ji = isrowmajor ? (:i, :j) : (:j, :i)  # Swapped variables for row and column ordering
+    _nk, _kn = isrowmajor ? (:n, :k) : (:k, :n)
+    _np, _pn = isrowmajor ? (:n, :p) : (:p, :n)
     W, H     = isrowmajor ? (:W, :H) : (:H, :W)
     
     @eval begin
@@ -116,14 +116,14 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
             p = size(Z, $dim_param)
             d = size(W, $dim_param)
             k = length(priors)
-            D   = Array(T, $D_n, $D_k) # discriminant function values
-            H   = Array(T, $H_n, $H_p) # temporary array to prevent re-allocation k times
-            hᵀh = Array(T, n)          # diag(H'H)
+            D   = Array(T, $_nk, $_kn)  # discriminant function values
+            H   = Array(T, $_np, $_pn)  # temporary array to prevent re-allocation k times
+            hᵀh = Array(T, n)           # diag(H'H)
             for j = 1:k
                 broadcast!(-, H, Z, subvector(Val{$scheme}, M, j))
                 dotvectors!(Val{$scheme}, $H * $W, hᵀh)
                 for i = 1:n
-                    D[$D_i, $D_j] = -hᵀh[i]/2 + log(priors[j])
+                    D[$_ij, $_ji] = -hᵀh[i]/2 + log(priors[j])
                 end
             end
             D
@@ -131,8 +131,8 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
     end
 end
 
-doc"`lda(X, y; M, gamma, priors)` Fits a regularized linear discriminant model to the data in `X` 
-based on class identifier `y`."
+doc"`lda(X, y; order, M, gamma, priors)` Fits a regularized linear discriminant model to the data 
+in `X` based on class identifier `y`."
 function lda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::AbstractVector{U};
@@ -148,8 +148,8 @@ function lda{T<:BlasReal,U<:Integer}(
     ModelLDA{T}(order, false, W, M, priors, γ)
 end
 
-doc"`cda(X, y; M, gamma, priors)` Fits a regularized canonical discriminant model to the data in
-`X` based on class identifier `y`."
+doc"`cda(X, y; order, M, gamma, priors)` Fits a regularized canonical discriminant model to the 
+data in `X` based on class identifier `y`."
 function cda{T<:BlasReal,U<:Integer}(
         X::Matrix{T},
         y::AbstractVector{U};
@@ -170,5 +170,5 @@ function discriminants{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
 end
 
 function classify{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
-    mapslices(indmax, discriminants(mod, Z), 2)
+    mapslices(indmax, discriminants(mod, Z), mod.order == Val{:row} ? 2 : 1)
 end
