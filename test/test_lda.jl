@@ -138,8 +138,8 @@ for order in (:row, :col)
         model1 = lda(X_tst, y, order=Val{order})
         model2 = cda(X_tst, y, order=Val{order})
 
-        D1 = mapslices(indmax, MOD.discriminants(model1, X_tst), isrowmajor ? 2 : 1)
-        D2 = mapslices(indmax, MOD.discriminants(model2, X_tst), isrowmajor ? 2 : 1)
+        D1 = vec(mapslices(indmax, MOD.discriminants(model1, X_tst), isrowmajor ? 2 : 1))
+        D2 = vec(mapslices(indmax, MOD.discriminants(model2, X_tst), isrowmajor ? 2 : 1))
 
         @test D1 == MOD.classify(model1, X_tst)
         @test D2 == MOD.classify(model2, X_tst)

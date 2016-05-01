@@ -5,9 +5,9 @@
 immutable ModelLDA{T<:BlasReal}
     order::Union{Type{Val{:row}},Type{Val{:col}}}
     is_cda::Bool
-    W::Matrix{T}       # Whitening matrix
-    M::Matrix{T}       # Matrix of class means (one per row)
-    priors::Vector{T}  # Vector of class priors
+    W::AbstractMatrix{T}  # Whitening matrix
+    M::Matrix{T}          # Matrix of class means (one per row)
+    priors::Vector{T}     # Vector of class priors
     gamma::Nullable{T}
 end
 
@@ -107,7 +107,7 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
 
         function discriminants_lda{T<:BlasReal}(
                  ::Type{Val{$scheme}},
-                W::Matrix{T},
+                W::AbstractMatrix{T},
                 M::Matrix{T},
                 priors::Vector{T},
                 Z::Matrix{T}
@@ -143,8 +143,10 @@ function lda{T<:BlasReal,U<:Integer}(
     )
     all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
+    yref = isa(y,RefVector) ? y : RefVector(y)
+    length(priors) == yref.k || throw(DimensionMismatch("Prior length must match class count"))
     γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
-    W = lda!(order, copy(X), M, isa(y,RefVector) ? y : RefVector(y), γ)
+    W = lda!(order, copy(X), M, yref, γ)
     ModelLDA{T}(order, false, W, M, priors, γ)
 end
 
@@ -160,8 +162,10 @@ function cda{T<:BlasReal,U<:Integer}(
     )
     all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
+    yref = isa(y,RefVector) ? y : RefVector(y)
+    length(priors) == yref.k || throw(DimensionMismatch("Prior length must match class count"))
     γ = isa(gamma, Nullable) ? gamma : Nullable(gamma)
-    W = cda!(order, copy(X), copy(M), isa(y,RefVector) ? y : RefVector(y), γ, priors)
+    W = cda!(order, copy(X), copy(M), yref, γ, priors)
     ModelLDA{T}(order, true, W, M, priors, γ)
 end
 
@@ -170,5 +174,5 @@ function discriminants{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
 end
 
 function classify{T<:BlasReal}(mod::ModelLDA{T}, Z::Matrix{T})
-    mapslices(indmax, discriminants(mod, Z), mod.order == Val{:row} ? 2 : 1)
+    vec(mapslices(indmax, discriminants(mod, Z), mod.order == Val{:row} ? 2 : 1))
 end

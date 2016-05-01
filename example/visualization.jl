@@ -8,13 +8,15 @@ function rotationmatrix2D{T<:AbstractFloat}(θ::T)
       sin(θ)  cos(θ)]
 end
 
-function boxmuller(n::Integer)  # Generates two normally distributed variables
+# Generates two normally distributed variables
+function boxmuller(n::Integer)
     u1 = rand(n)
     u2 = rand(n)
     Z = Float64[(√(-2log(u1)) .* cos(2π*u2)) (√(-2log(u1)) .* sin(2π*u2))]
 end
 
-function boundary(model, xrange, yrange, is_quad::Bool = false)  # Create the decision boundary using Contour.jl 
+# Create the decision boundary using Contour.jl
+function boundary(model, xrange, yrange, is_quad::Bool = false)
     Z = hcat(vec(Float64[x for x in xrange, y in yrange]), 
              vec(Float64[y for x in xrange, y in yrange]))
     δ = DiscriminantAnalysis.discriminants(model, is_quad ? hcat(Z, Z.^2, Z[:,1] .* Z[:,2]) : Z)

@@ -4,9 +4,9 @@
 
 immutable ModelQDA{T<:BlasReal}
     order::Union{Type{Val{:row}},Type{Val{:col}}}
-    W_k::Vector{Matrix{T}}  # Vector of class whitening matrices
-    M::Matrix{T}            # Matrix of class means (one per row)
-    priors::Vector{T}       # Vector of class priors
+    W_k::Vector{AbstractMatrix{T}}  # Vector of class whitening matrices
+    M::Matrix{T}                    # Matrix of class means (one per row)
+    priors::Vector{T}               # Vector of class priors
     gamma::Nullable{T}
     lambda::Nullable{T}
 end
@@ -16,7 +16,7 @@ function show(io::IO, model::ModelQDA)
     println(io, "\nRegularization Parameters:")
     print(io, "    γ = ")
     isnull(model.gamma) ? print(io, "N/A") : showcompact(get(model.gamma))
-    print(io, "    λ = ")
+    print(io, "\n    λ = ")
     isnull(model.lambda) ? print(io, "N/A") : showcompact(get(model.lambda))
     println(io, "\n\nClass Priors:")
     for i in eachindex(model.priors)
@@ -107,7 +107,7 @@ for (scheme, dim_obs) in ((:(:row), 1), (:(:col), 2))
 
         function discriminants_qda{T<:BlasReal}(
                  ::Type{Val{$scheme}},
-                W_k::Vector{Matrix{T}},
+                W_k::Vector{AbstractMatrix{T}},
                 M::Matrix{T},
                 priors::Vector{T},
                 Z::Matrix{T}
@@ -143,9 +143,11 @@ function qda{T<:BlasReal,U<:Integer}(
     )
     all(priors .> 0) || error("Argument priors must have positive values only")
     isapprox(sum(priors), one(T)) || error("Argument priors must sum to 1")
+    yref = isa(y,RefVector) ? y : RefVector(y)
+    length(priors) == yref.k || throw(DimensionMismatch("Prior length must match class count"))
     γ = isa(gamma,  Nullable) ? gamma  : Nullable(gamma)
     λ = isa(lambda, Nullable) ? lambda : Nullable(lambda)
-    W_k = qda!(order, copy(X), M, isa(y,RefVector) ? y : RefVector(y), γ, λ)
+    W_k = qda!(order, copy(X), M, yref, γ, λ)
     ModelQDA{T}(order, W_k, M, priors, γ, λ)
 end
 
@@ -156,5 +158,5 @@ end
 
 doc"`classify(Model, Z)` Uses `Model` on input `Z`."
 function classify{T<:BlasReal}(mod::ModelQDA{T}, Z::Matrix{T})
-    mapslices(indmax, discriminants(mod, Z), mod.order == Val{:row} ? 2 : 1)
+    vec(mapslices(indmax, discriminants(mod, Z), mod.order == Val{:row} ? 2 : 1))
 end

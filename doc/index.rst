@@ -21,6 +21,10 @@ The source code is available on Github:
 
 To add the package from Julia:
 
+.. code:: julia
+
+  Pkg.add("DiscriminantAnalysis")
+
 Theory
 ======
 
@@ -31,7 +35,7 @@ class :math:`k`, the probability distribution can be modelled by:
 
 .. math::
     
-    f_k(x) = \frac{\exp\left((\mathbf{x}-\mathbf{\mu_k})^{\intercal}\Sigma_k^{-1}(\mathbf{x}-\mathbf{\mu_k})\right)}{(2\pi)^{p/2}\left|\Sigma_k\right|^{1/2}}
+    f_k(x) = \frac{\exp\left(\frac{-1}{2}(\mathbf{x}-\mathbf{\mu_k})^{\intercal}\Sigma_k^{-1}(\mathbf{x}-\mathbf{\mu_k})\right)}{(2\pi)^{p/2}\left|\Sigma_k\right|^{1/2}}
 
 Let :math:`\pi_k` represent the prior class membership probabilities. 
 Application of Baye's Theorem results in:

@@ -102,7 +102,7 @@ for order in (:row, :col)
         priors_tst = convert(Vector{T}, priors)
 
         model = qda(X_tst, y, order=Val{order})
-        D1 = mapslices(indmax, MOD.discriminants(model, X_tst), isrowmajor ? 2 : 1)
+        D1 = vec(mapslices(indmax, MOD.discriminants(model, X_tst), isrowmajor ? 2 : 1))
         @test D1 == MOD.classify(model, X_tst)
     end
 end
