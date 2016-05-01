@@ -58,6 +58,29 @@ for order in (:row, :col)
     end
 end
 
+info("Testing ", MOD.qda)
+for order in (:row, :col)
+    for T in FloatingPointTypes
+        isrowmajor = order == :row
+        X_tst = isrowmajor ? copy(convert(Matrix{T}, X)) : transpose(convert(Matrix{T}, X))
+        M_tst = isrowmajor ? copy(convert(Matrix{T}, M)) : transpose(convert(Matrix{T}, M))
+
+        for γ in (Nullable{T}(), zero(T), Nullable(convert(T, 0.5)), convert(T, 0.5), one(T))
+            for λ in (Nullable{T}(), zero(T), Nullable(convert(T, 0.5)), convert(T, 0.5), one(T))
+                model = MOD.qda(X_tst, y, order=Val{order}, gamma=γ, lambda=λ)
+                γ_tst = isa(γ, Nullable) ? γ : Nullable(γ)
+                λ_tst = isa(λ, Nullable) ? λ : Nullable(λ)
+                W_k_tst = MOD.qda!(Val{order}, copy(X_tst), copy(M_tst), y, γ_tst, λ_tst)
+                for i in eachindex(model.W_k)
+                    @test_approx_eq model.W_k[i] W_k_tst[i]
+                end
+                @test_approx_eq model.M M_tst
+            end
+        end
+    end
+end
+
+
 #=
 
 info("Testing ", MOD.discriminants_qda)
