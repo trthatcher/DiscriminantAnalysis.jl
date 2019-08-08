@@ -1,0 +1,6 @@
+name = "DiscriminantAnalysis"
+uuid = "2091bfbe-2937-51d6-a893-7459a14235e5"
+version = "0.1.0"
+
+[compat]
+julia = "≥ 0.4.0"
