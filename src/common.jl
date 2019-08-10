@@ -22,7 +22,7 @@ Shrink `Σ` matrix towards the average eigenvalue multiplied by the identity mat
 function regularize!(Σ::Matrix{T}, γ::T) where {T}
     m, n = size(Σ)
     m == n || throw(DimensionMismatch("matrices Σ₁ and Σ₂ must be square"))
-    0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ must be in the interval [0,1]"))
+    0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ=$(γ) must be in the interval [0,1]"))
 
     λ_avg = tr(Σ)/m  # Find average eigenvalue
 
@@ -74,4 +74,53 @@ function center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix,
                                             "number of rows in M (got $mX and $mM"))
         _center_classes!(transpose(X), y, transpose(M))
     end
+end
+
+"""
+    _whiten_data!(X::Matrix{T})
+
+Generate whitening transform matrix for centered data matrix X
+"""
+function _whiten_data!(X::AbstractMatrix{T}) where T
+    m, n = size(X)
+    m > n || error("insufficient within-class observations to produce a full rank " *
+                   "covariance matrix. Collect more data or consider regularization")
+
+    # TODO: Can X be overwritten with inplace qr?
+    R = UpperTriangular(qr(X, Val(false)).R)  # X = QR ⟹ S = X'X = R'R
+    
+    W = inv(R)
+    #error("""Rank deficiency (collinearity) detected with tolerance $(ϵ). Ensure that all 
+    #classes have sufficient observations to produce a full-rank covariance matrix.""")
+    broadcast!(*, W, W, √(m-1))
+end
+
+function _whiten_data!(X::AbstractMatrix{T}, γ::T) where T
+    0 ≤ γ ≤ 1 || error("γ=$(γ) must be in the interval [0,1]")
+
+    n, p = size(X)
+    n > p || error("insufficient number of within-class observations to produce a full " *
+                   "rank covariance matrix ($(n) observation, $(p) predictors)")
+
+    ϵ = n*eps(norm(X))
+
+    UDVᵀ = svd(X, full=false)  # Vᵀ from thin SVD will be n×n since m > n
+
+    D = UDVᵀ.S
+    broadcast!(σᵢ -> (σᵢ^2)/(n-1), D, D)  # Convert data singular values to cov eigenvalues
+
+    # Regularize: Σ = VD²Vᵀ ⟹ Σ(γ) = V((1-γ)D² + (γ/p)trace(D²)I)Vᵀ
+    if γ ≠ 0
+        λ_bar = mean(D)
+        broadcast!(λᵢ -> √((1-γ)*λᵢ + γ*λ_bar), D, D)
+    else
+        broadcast!(√, D, D)
+    end
+
+    all(D ≥ ϵ) || error("rank deficiency (collinearity) detected with tolerance $(ϵ). " *
+                        "Ensure that all predictors are linearly independent")
+
+    # Whitening matrix
+    Vᵀ = UDVᵀ.Vt
+    W = broadcast!(/, Vᵀ, Vᵀ, D)
 end
