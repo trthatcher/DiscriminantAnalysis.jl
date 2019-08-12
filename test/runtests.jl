@@ -2,7 +2,7 @@ using Test, LinearAlgebra, Statistics, DiscriminantAnalysis
 
 const DA = DiscriminantAnalysis
 
-@testset "Common" begin
+@testset "common.jl" begin
     include("test_common.jl")
 end
 

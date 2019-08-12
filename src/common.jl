@@ -1,3 +1,54 @@
+# Error shortcuts
+dim_error(s) = throw(DimensionMismatch(s))
+arg_error(s) = throw(ArgumentError(s))
+
+function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:Int}) where T
+    n, p = size(X)
+    k, pₘ = size(M)
+    l = length(y)
+    
+    p == pₘ || dim_error("the number of columns in X must match the number of columns in " *
+                         "M (got $(p) and $(pₘ))")
+    
+    n == l || dim_error("the number of rows in X must match the length y (got $(n) and " *
+                        "$(l))")
+           
+    M .= zero(T)
+    nₖ = zeros(Int, k)  # track counts to ensure an observation for each class
+    for i = 1:n
+        kᵢ = y[i]
+        1 ≤ kᵢ ≤ k || throw(BoundsError(M, (kᵢ, 1)))
+        nₖ[kᵢ] += 1
+        @inbounds for j = 1:p
+            M[kᵢ, j] += X[i, j]
+        end
+    end
+
+    all(nₖ .> 1) || error("must have at least one observation per class")
+    
+    broadcast!(/, M, M, nₖ)
+end
+
+function class_means(X::AbstractMatrix{T}, y::Vector{<:Int}, dims::Int=1; 
+                     k::Int=maximum(y)) where T
+    dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $(dims))"))
+
+    if dims == 1  # rows
+        M = Array{T}(undef, k, size(X, 2))
+        class_means!(M, X, y)
+    else  # columns
+        p, n = size(X)
+        l = length(y)
+
+        n == l || dim_error("the number of columns in X must match the length y (got " * 
+                            "$(n) and $(l))")
+        
+        M = Array{T}(undef, p, k)
+        class_means!(transpose(M), transpose(X), y)
+    end
+end
+
+
 """
 _center_classes!(X, y, M)
 """
@@ -29,16 +80,16 @@ function center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix,
     if dims == 1
         nM = size(M, 2)
         mX == ly || throw(DimensionMismatch("the number of rows in X must match the " *
-        "length of y (got $mX and $ly"))
+                                            "length of y (got $(mX) and $(ly)"))
         nX == nM || throw(DimensionMismatch("the number of columns in X must match the " *
-        "number of columns in M (got $nX and $nM"))
+                                            "number of columns in M (got $(nX) and $(nM)"))
         _center_classes!(X, y, M)
     else
         mM = size(M, 1)
         nX == ly || throw(DimensionMismatch("the number of columns in X must match the " *
-        "length of y (got $nX and $ly"))
+                                            "length of y (got $nX and $ly"))
         mX == mM || throw(DimensionMismatch("the number of rows in X must match the " *
-        "number of rows in M (got $mX and $mM"))
+                                            "number of rows in M (got $mX and $mM"))
         _center_classes!(transpose(X), y, transpose(M))
     end
 end
