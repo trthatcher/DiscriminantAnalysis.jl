@@ -2,7 +2,7 @@
 dim_error(s) = throw(DimensionMismatch(s))
 arg_error(s) = throw(ArgumentError(s))
 
-function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:Int}) where T
+function _class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:Int}) where T
     n, p = size(X)
     k, pₘ = size(M)
     l = length(y)
@@ -24,18 +24,18 @@ function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:In
         end
     end
 
-    all(nₖ .> 1) || error("must have at least one observation per class")
+    all(nₖ .> 1) || error("must have at least two observations per class")
     
     broadcast!(/, M, M, nₖ)
 end
 
-function class_means(X::AbstractMatrix{T}, y::Vector{<:Int}, dims::Int=1; 
-                     k::Int=maximum(y)) where T
+function _class_means(X::AbstractMatrix{T}, y::Vector{<:Int}; dims::Integer=1, 
+                      k::Integer=maximum(y)) where T
     dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $(dims))"))
 
     if dims == 1  # rows
         M = Array{T}(undef, k, size(X, 2))
-        class_means!(M, X, y)
+        _class_means!(M, X, y)
     else  # columns
         p, n = size(X)
         l = length(y)
@@ -44,7 +44,8 @@ function class_means(X::AbstractMatrix{T}, y::Vector{<:Int}, dims::Int=1;
                             "$(n) and $(l))")
         
         M = Array{T}(undef, p, k)
-        class_means!(transpose(M), transpose(X), y)
+        _class_means!(transpose(M), transpose(X), y)
+        M
     end
 end
 
@@ -53,13 +54,20 @@ end
 _center_classes!(X, y, M)
 """
 function _center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix)
-    m, n = size(X)
-    k = size(M, 1)
+    n, p = size(X)
+    k, pₘ = size(M)
+    l = length(y)
+
+    p == pₘ || dim_error("the number of columns in X must match the number of columns in " *
+                         "M (got $(p) and $(pₘ))")
     
-    for i = 1:m
+    n == l || dim_error("the number of rows in X must match the length y (got $(n) and " *
+                        "$(l))")
+    
+    for i = 1:n
         kᵢ = y[i]
         1 ≤ kᵢ ≤ k || throw(BoundsError(M, (kᵢ, 1)))
-        @inbounds for j = 1:n
+        @inbounds for j = 1:p
             X[i, j] -= M[kᵢ, j]
         end
     end
@@ -69,27 +77,25 @@ end
 
 
 """
-center_classes!(X, y, M)
+_center_classes!(X, y, M)
 """
-function center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix, 
-                         dims::Integer=2)
+function _center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix, 
+                          dims::Integer)
     dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
-    
-    mX, nX = size(X)
-    ly = length(y)
+
     if dims == 1
-        nM = size(M, 2)
-        mX == ly || throw(DimensionMismatch("the number of rows in X must match the " *
-                                            "length of y (got $(mX) and $(ly)"))
-        nX == nM || throw(DimensionMismatch("the number of columns in X must match the " *
-                                            "number of columns in M (got $(nX) and $(nM)"))
         _center_classes!(X, y, M)
     else
-        mM = size(M, 1)
-        nX == ly || throw(DimensionMismatch("the number of columns in X must match the " *
-                                            "length of y (got $nX and $ly"))
-        mX == mM || throw(DimensionMismatch("the number of rows in X must match the " *
-                                            "number of rows in M (got $mX and $mM"))
+        p, n = size(X)
+        pₘ, k = size(M)
+        l = length(y)
+
+        p == pₘ || dim_error("the number of rows in X must match the number of rows in M " *
+                             "(got $(p) and $(pₘ))")
+
+        n == l || dim_error("the number of columns in X must match the length y (got " * 
+                            "$(n) and $(l))")
+
         _center_classes!(transpose(X), y, transpose(M))
     end
 end

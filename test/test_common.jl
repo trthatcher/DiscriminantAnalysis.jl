@@ -1,67 +1,146 @@
-@testset "class_means!(M, X, y)" begin
+@testset "_class_means!(M, X, y)" begin
     n = 10
     p = 3
-    ix = sortperm(rand(2n))
-    y = repeat(1:2, inner=n)[ix]
 
     for T in (Float32, Float64)
-        X1 = rand(T, n, p)
-        X1 .-= mean(X1, dims=1)
-        X1 .+= 1
-        X2 = rand(T, n, p)
-        X2 .-= mean(X2, dims=1)
-        X2 .-= 1
-        
-        X = [X1; X2][ix, :]
+        X, y, M = generate_data(T, n, p)
+        Xt = transpose(copy(transpose(X)))
+        Mt = transpose(copy(transpose(M)))
         
         # test predictor dimensionality
-        #print("y: ", y, "\n")
-        #print("X: ", X, "\n")
-        #DA.class_means!(zeros(T,2,p+1), X, y)
-        @test_throws DimensionMismatch DA.class_means!(zeros(T,2,p+1), X, y)
-        @test_throws DimensionMismatch DA.class_means!(zeros(T,2,p-1), X, y)
+        @test_throws DimensionMismatch DA._class_means!(zeros(T,2,p+1), X,  y)
+        @test_throws DimensionMismatch DA._class_means!(zeros(T,2,p-1), X,  y)
+        @test_throws DimensionMismatch DA._class_means!(zeros(T,2,p+1), Xt, y)
+        @test_throws DimensionMismatch DA._class_means!(zeros(T,2,p-1), Xt, y)
 
         # test observation dimensionality
-        @test_throws DimensionMismatch DA.class_means!(zeros(T,2,p), X, zeros(Int,n+1))
-        @test_throws DimensionMismatch DA.class_means!(zeros(T,2,p), X, zeros(Int,n-1))
+        @test_throws DimensionMismatch DA._class_means!(similar(M),  X,  zeros(Int,n+1))
+        @test_throws DimensionMismatch DA._class_means!(similar(M),  X,  zeros(Int,n-1))
+        @test_throws DimensionMismatch DA._class_means!(similar(Mt), Xt, zeros(Int,n+1))
+        @test_throws DimensionMismatch DA._class_means!(similar(Mt), Xt, zeros(Int,n-1))
 
         # test indexing of class_means
         y_test = copy(y)
 
         y_test[p] = 3
-        @test_throws BoundsError DA.class_means!(zeros(T,2,p), X, y_test)
+        @test_throws BoundsError DA._class_means!(similar(M),  X,  y_test)
+        @test_throws BoundsError DA._class_means!(similar(Mt), Xt, y_test)
 
         y_test[p] = 0
-        @test_throws BoundsError DA.class_means!(zeros(T,2,p), X, y_test)
+        @test_throws BoundsError DA._class_means!(similar(M),  X,  y_test)
+        @test_throws BoundsError DA._class_means!(similar(Mt), Xt, y_test)
 
         # test observation count
         y_test = copy(y)
-        y_test .= 1
+        y_test .= 2
 
-        @test_throws ErrorException DA.class_means!(zeros(T,2,p), X, y_test)
+        @test_throws ErrorException DA._class_means!(similar(M),  X,  y_test)
+        @test_throws ErrorException DA._class_means!(similar(Mt), Xt, y_test)
 
         # test mean computation
-        M = zeros(T, 2, p)
+        M_test = similar(M)
+        M_res = DA._class_means!(M_test, X, y)
+        @test M_test === M_res
+        @test isapprox(M, M_test)
 
-        M_test = ones(T, 2, p)
-        M_test[2, :] .= -1
-
-        M_res = DA.class_means!(M, X, y)
-
-        @test M === M_res
+        Mt_test = transpose(similar(transpose(M)))
+        M_res = DA._class_means!(Mt_test, Xt, y)
+        @test Mt_test === M_res
         @test isapprox(M, M_test)
     end
 end
 
-#@testset "_center_classes" begin
-#    n = 10
-#    p = 3
-#    for T in (Float32, Float64), U in (Int32, Int64)
-#        X1 = rand(n, p)
-#        X2 = rand(n, p)
-#
-#    end
-#end
+@testset "_class_means(X, y; dims, k)" begin
+    n = 10
+    p = 3
+
+    for T in (Float32, Float64)
+        X, y, M = generate_data(T, n, p)
+        Xt = copy(transpose(X))
+
+        # Check dims argument
+        @test_throws ArgumentError DA._class_means(X, y, dims=0)
+        @test_throws ArgumentError DA._class_means(X, y, dims=3)
+
+        # Test predictor dimensionality
+        @test_throws DimensionMismatch DA._class_means(X,  zeros(Int,n+1))
+        @test_throws DimensionMismatch DA._class_means(X,  zeros(Int,n-1))
+
+        @test_throws DimensionMismatch DA._class_means(Xt, zeros(Int,n+1), dims=2)
+        @test_throws DimensionMismatch DA._class_means(Xt, zeros(Int,n-1), dims=2)
+
+        # test indexing of class_means - careful of k argument
+        y_test = copy(y)
+
+        y_test[p] = 3
+        @test_throws BoundsError DA._class_means(X,  y_test, k=2)
+        @test_throws BoundsError DA._class_means(Xt, y_test, dims=2, k=2)
+
+        y_test[p] = 0
+        @test_throws BoundsError DA._class_means(X,  y_test)
+        @test_throws BoundsError DA._class_means(Xt, y_test, dims=2)
+
+        # test observation count
+        y_test = copy(y)
+        y_test .= 2
+
+        @test_throws ErrorException DA._class_means(X,  y_test)
+        @test_throws ErrorException DA._class_means(Xt, y_test, dims=2)
+
+        # test mean computation
+        M_test = DA._class_means(X, y)
+        @test isapprox(M, M_test)
+
+        M_test = DA._class_means(Xt, y, dims=2)
+        @test isapprox(transpose(M), M_test)
+    end
+end
+
+@testset "_center_classes!(X, y, M)" begin
+    n = 10
+    p = 3
+
+    for T in (Float32, Float64)
+        X, y, M = generate_data(T, n, p)
+        Xtt = transpose(copy(transpose(X)))
+        Mtt = transpose(copy(transpose(M)))
+
+        # test predictor dimensionality
+        @test_throws DimensionMismatch DA._center_classes!(X,  y, zeros(T,2,p+1))
+        @test_throws DimensionMismatch DA._center_classes!(X,  y, zeros(T,2,p-1))
+        @test_throws DimensionMismatch DA._center_classes!(Xtt, y, zeros(T,2,p+1))
+        @test_throws DimensionMismatch DA._center_classes!(Xtt, y, zeros(T,2,p-1))
+
+        # test observation dimensionality
+        @test_throws DimensionMismatch DA._center_classes!(X,  zeros(Int,n+1), similar(M))
+        @test_throws DimensionMismatch DA._center_classes!(X,  zeros(Int,n-1), similar(M))
+        @test_throws DimensionMismatch DA._center_classes!(Xtt, zeros(Int,n+1), similar(Mtt))
+        @test_throws DimensionMismatch DA._center_classes!(Xtt, zeros(Int,n-1), similar(Mtt))
+
+        # test indexing of class_means - careful of k argument
+        y_test = copy(y)
+
+        y_test[p] = 3
+        @test_throws BoundsError DA._center_classes!(copy(X),  y_test, M)
+        @test_throws BoundsError DA._center_classes!(copy(Xtt), y_test, Mtt)
+
+        y_test[p] = 0
+        @test_throws BoundsError DA._center_classes!(copy(X),  y_test, M)
+        @test_throws BoundsError DA._center_classes!(copy(Xtt), y_test, Mtt)
+
+        # test centering
+        X_center = X .- M[y, :]
+        X_test = DA._center_classes!(X, y, M)
+
+        @test X == X_test
+        @test isapprox(X_center, X)
+
+        Xtt_test = DA._center_classes!(Xtt, y, Mtt)
+
+        @test Xtt == Xtt_test
+        @test isapprox(X_center, Xtt)
+    end
+end
 
 
 @testset "regularize!(Σ₁, Σ₂, λ)" begin
