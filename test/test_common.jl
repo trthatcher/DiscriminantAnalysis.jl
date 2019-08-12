@@ -130,15 +130,68 @@ end
 
         # test centering
         X_center = X .- M[y, :]
-        X_test = DA._center_classes!(X, y, M)
 
-        @test X == X_test
+        X_test = DA._center_classes!(X, y, M)
+        @test X === X_test
         @test isapprox(X_center, X)
 
         Xtt_test = DA._center_classes!(Xtt, y, Mtt)
-
-        @test Xtt == Xtt_test
+        @test Xtt === Xtt_test
         @test isapprox(X_center, Xtt)
+    end
+end
+
+@testset "_center_classes!(X, y, M, dims)" begin
+    n = 10
+    p = 3
+
+    for T in (Float32, Float64)
+        X, y, M = generate_data(T, n, p)
+        Xt = copy(transpose(X))
+        Mt = copy(transpose(M))
+
+        # check dims argument
+        @test_throws ArgumentError DA._center_classes!(X, y, M, 0)
+        @test_throws ArgumentError DA._center_classes!(X, y, M, 3)
+
+        # test predictor dimensionality
+        @test_throws DimensionMismatch DA._center_classes!(X, y, zeros(T,2,p+1), 1)
+        @test_throws DimensionMismatch DA._center_classes!(X, y, zeros(T,2,p-1), 1)
+
+        @test_throws DimensionMismatch DA._center_classes!(Xt, y, zeros(T,p+1,2), 2)
+        @test_throws DimensionMismatch DA._center_classes!(Xt, y, zeros(T,p-1,2), 2)
+
+        # test observation dimensionality
+        @test_throws DimensionMismatch DA._center_classes!(X, zeros(Int,n+1), M, 1)
+        @test_throws DimensionMismatch DA._center_classes!(X, zeros(Int,n-1), M, 1)
+
+        @test_throws DimensionMismatch DA._center_classes!(Xt, zeros(Int,n+1), Mt, 2)
+        @test_throws DimensionMismatch DA._center_classes!(Xt, zeros(Int,n-1), Mt, 2)
+
+        # test indexing of class_means - careful of k argument
+        y_test = copy(y)
+
+        y_test[p] = 3
+        @test_throws BoundsError DA._center_classes!(copy(X),   y_test, M, 1)
+        @test_throws BoundsError DA._center_classes!(copy(Xt), y_test, Mt, 2)
+
+        y_test[p] = 0
+        @test_throws BoundsError DA._center_classes!(copy(X),   y_test, M, 1)
+        @test_throws BoundsError DA._center_classes!(copy(Xt), y_test, Mt, 2)
+
+        # test centering
+        X_center = X .- M[y, :]
+
+        X_test = DA._center_classes!(X, y, M, 1)
+        @test X === X_test
+        @test isapprox(X_center, X)
+
+        print("Xtt: ", Xt, "\n\n")
+        print("Mtt: ", Mt, "\n\n")
+
+        Xt_test = DA._center_classes!(Xt, y, Mt, 2)
+        @test Xt === Xt_test
+        @test isapprox(transpose(X_center), Xt)
     end
 end
 

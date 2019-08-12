@@ -26,7 +26,7 @@ function _class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:I
 
     all(nₖ .> 1) || error("must have at least two observations per class")
     
-    broadcast!(/, M, M, nₖ)
+    return broadcast!(/, M, M, nₖ)
 end
 
 function _class_means(X::AbstractMatrix{T}, y::Vector{<:Int}; dims::Integer=1, 
@@ -35,7 +35,7 @@ function _class_means(X::AbstractMatrix{T}, y::Vector{<:Int}; dims::Integer=1,
 
     if dims == 1  # rows
         M = Array{T}(undef, k, size(X, 2))
-        _class_means!(M, X, y)
+        return _class_means!(M, X, y)
     else  # columns
         p, n = size(X)
         l = length(y)
@@ -45,7 +45,7 @@ function _class_means(X::AbstractMatrix{T}, y::Vector{<:Int}; dims::Integer=1,
         
         M = Array{T}(undef, p, k)
         _class_means!(transpose(M), transpose(X), y)
-        M
+        return M
     end
 end
 
@@ -77,14 +77,14 @@ end
 
 
 """
-_center_classes!(X, y, M)
+_center_classes!(X, y, M, dims)
 """
 function _center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix, 
                           dims::Integer)
     dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
 
     if dims == 1
-        _center_classes!(X, y, M)
+        return _center_classes!(X, y, M)
     else
         p, n = size(X)
         pₘ, k = size(M)
@@ -97,6 +97,7 @@ function _center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix
                             "$(n) and $(l))")
 
         _center_classes!(transpose(X), y, transpose(M))
+        return X
     end
 end
 
@@ -150,9 +151,8 @@ function _whiten_data!(X::AbstractMatrix{T}) where T
 
     R = UpperTriangular(qr!(X, Val(false)).R)  # X = QR ⟹ S = X'X = R'R
     
-    try
-        W = inv(R)
-        broadcast!(*, W, W, √(n-1))
+    W = try
+        inv(R)
     catch err
         if isa(err, LAPACKException)
             if err.info ≥ 1
@@ -161,6 +161,8 @@ function _whiten_data!(X::AbstractMatrix{T}) where T
         end
         throw(err)
     end
+    
+    return broadcast!(*, W, W, √(n-1))
 end
 
 
