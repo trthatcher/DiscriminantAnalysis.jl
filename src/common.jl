@@ -151,12 +151,12 @@ function _whiten_data!(X::Matrix{T}, dims::Int) where T
     n > p || error("insufficient number of within-class observations to produce a full " *
                    "rank covariance matrix ($(n) observation, $(p) predictors)")
 
-    R = if dims == 1
+    if dims == 1
         # X = QR ⟹ S = XᵀX = RᵀR
-        UpperTriangular(qr!(X, Val(false)).R)  
+        R = UpperTriangular(qr!(X, Val(false)).R)  
     else
         # Xᵀ = LQ ⟹ S = XXᵀ = LLᵀ = RᵀR
-        UpperTriangular(transpose(lq!(X).L))  
+        R = UpperTriangular(transpose(lq!(X).L))  
     end
 
     W = try
@@ -180,15 +180,16 @@ function _whiten_data!(X::Matrix{T}, dims::Int) where T
 end
 
 
-# transpose(X*W')*(X*W')
-function _whiten_data(X::AbstractMatrix{T}, γ::T, ϵ::T=size(X,2)*eps(T)*maximum(X)) where T
+function _whiten_data!(X::Matrix{T}, γ::T, dims::Int; atol::T = zero(T),
+                       rtol::T = (eps(one(T))*min(size(X)...))*iszero(atol)) where T
     0 ≤ γ ≤ 1 || error("γ must be in the interval [0,1] (got $(γ))")
-
-    n, p = size(X)
+    dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
+    n = size(X, dims)
+    p = size(X, dims == 1 ? 2 : 1)
     n > p || error("insufficient number of within-class observations to produce a full " *
                    "rank covariance matrix ($(n) observation, $(p) predictors)")
 
-    UDVᵀ = svd(X, full=false)  # Vᵀ from thin SVD will be n×n since m > n
+    UDVᵀ = svd!(X, full=false)  # Vᵀ from thin SVD will be n×n since m > n
 
     D = UDVᵀ.S
     broadcast!(σᵢ -> (σᵢ^2)/(n-1), D, D)  # Convert data singular values to cov eigenvalues
@@ -201,11 +202,19 @@ function _whiten_data(X::AbstractMatrix{T}, γ::T, ϵ::T=size(X,2)*eps(T)*maximu
         broadcast!(√, D, D)
     end
 
-    all(D .≥ ϵ) || error("rank deficiency (collinearity) detected with tolerance $(ϵ)")
+    tol = max(rtol*maximum(D), atol)
+    all(D .> tol) || error("rank deficiency (collinearity) detected with tolerance $(tol)")
 
     # Whitening matrix
-    Vᵀ = UDVᵀ.Vt
-    W = broadcast!(/, Vᵀ, Vᵀ, D)
+    if dims == 1
+        Vᵀ = UDVᵀ.Vt
+        Wᵀ = broadcast!(/, Vᵀ, Vᵀ, D)  # in-place diagonal matrix multiply DVᵀ
+    else
+        U = UDVᵀ.U
+        Wᵀ = broadcast!(/, U, U, transpose(D))
+    end
+
+    return transpose(Wᵀ)
 end
 
 

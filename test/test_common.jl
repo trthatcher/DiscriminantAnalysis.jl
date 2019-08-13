@@ -239,7 +239,7 @@ end
     end
 end
 
-@testset "_whiten_data(X)" begin
+@testset "_whiten_data(X, dims)" begin
     n = 10
     p = 3
     for T in (Float32, Float64)
@@ -265,6 +265,40 @@ end
         ### cols
         Xt_test = copy(Xt)
         W = DA._whiten_data!(Xt_test, 2)
+        @test isapprox(cov(W*Xt, dims=2), diagm(0 => ones(T, p)))
+    end
+end
+
+@testset "_whiten_data(X, γ, dims, ϵ)" begin
+    n = 10
+    p = 3
+    for T in (Float32, Float64)
+        # test limits for γ
+        @test_throws ErrorException DA._whiten_data!(zeros(T,p,p), T(0) - eps(T(0)), 1)
+        @test_throws ErrorException DA._whiten_data!(zeros(T,p,p), T(1) - eps(T(1)), 1)
+
+        # test matrix with too few rows
+        @test_throws ErrorException DA._whiten_data!(zeros(T,p,p), T(0), 1)
+        @test_throws ErrorException DA._whiten_data!(zeros(T,p,p), T(0), 2)
+        
+        # test singular matrix
+        @test_throws ErrorException DA._whiten_data!(zeros(T,n,p), T(0), 1)
+        @test_throws ErrorException DA._whiten_data!(zeros(T,p,n), T(0), 2)
+        
+        # test whitening 
+        X = T[diagm(0 => ones(T, p));
+              rand(n-p, p) .- 0.5]
+        X .= X .- mean(X, dims=1)  # Data must be centered
+        Xt = copy(transpose(X))
+
+        ### rows
+        X_test = copy(X)
+        W = DA._whiten_data!(X_test, T(0), 1)
+        @test isapprox(cov(X*W, dims=1), diagm(0 => ones(T, p)))
+
+        ### cols
+        Xt_test = copy(Xt)
+        W = DA._whiten_data!(Xt_test, T(0), 2)
         @test isapprox(cov(W*Xt, dims=2), diagm(0 => ones(T, p)))
     end
 end
