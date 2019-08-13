@@ -144,17 +144,25 @@ _whiten_data!(X::Matrix{T})
 
 Generate whitening transform matrix for centered data matrix X
 """
-function _whiten_data!(X::AbstractMatrix{T}) where T
-    n, p = size(X)
+function _whiten_data!(X::Matrix{T}, dims::Int) where T
+    dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
+    n = size(X, dims)
+    p = size(X, dims == 1 ? 2 : 1)
     n > p || error("insufficient number of within-class observations to produce a full " *
                    "rank covariance matrix ($(n) observation, $(p) predictors)")
 
-    R = UpperTriangular(qr!(X, Val(false)).R)  # X = QR ⟹ S = X'X = R'R
-    
+    R = if dims == 1
+        # X = QR ⟹ S = XᵀX = RᵀR
+        UpperTriangular(qr!(X, Val(false)).R)  
+    else
+        # Xᵀ = LQ ⟹ S = XXᵀ = LLᵀ = RᵀR
+        UpperTriangular(transpose(lq!(X).L))  
+    end
+
     W = try
         inv(R)
     catch err
-        if isa(err, LAPACKException)
+        if isa(err, LAPACKException) || isa(err, SingularException)
             if err.info ≥ 1
                 error("rank deficiency (collinearity) detected")
             end
@@ -162,19 +170,25 @@ function _whiten_data!(X::AbstractMatrix{T}) where T
         throw(err)
     end
     
-    return broadcast!(*, W, W, √(n-1))
+    broadcast!(*, W, W, √(n-1))
+
+    if dims == 1
+        return W
+    else
+        return transpose(W)
+    end
 end
 
 
 # transpose(X*W')*(X*W')
-function _whiten_data!(X::AbstractMatrix{T}, γ::T, ϵ::T=size(X,2)*eps(T)*maximum(X)) where T
+function _whiten_data(X::AbstractMatrix{T}, γ::T, ϵ::T=size(X,2)*eps(T)*maximum(X)) where T
     0 ≤ γ ≤ 1 || error("γ must be in the interval [0,1] (got $(γ))")
 
     n, p = size(X)
     n > p || error("insufficient number of within-class observations to produce a full " *
                    "rank covariance matrix ($(n) observation, $(p) predictors)")
 
-    UDVᵀ = svd!(X, full=false)  # Vᵀ from thin SVD will be n×n since m > n
+    UDVᵀ = svd(X, full=false)  # Vᵀ from thin SVD will be n×n since m > n
 
     D = UDVᵀ.S
     broadcast!(σᵢ -> (σᵢ^2)/(n-1), D, D)  # Convert data singular values to cov eigenvalues

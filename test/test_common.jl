@@ -186,9 +186,6 @@ end
         @test X === X_test
         @test isapprox(X_center, X)
 
-        print("Xtt: ", Xt, "\n\n")
-        print("Mtt: ", Mt, "\n\n")
-
         Xt_test = DA._center_classes!(Xt, y, Mt, 2)
         @test Xt === Xt_test
         @test isapprox(transpose(X_center), Xt)
@@ -239,5 +236,35 @@ end
 
             @test isapprox(S_test, (1-γ)S + γ*(tr(S)/p)I)
         end
+    end
+end
+
+@testset "_whiten_data(X)" begin
+    n = 10
+    p = 3
+    for T in (Float32, Float64)
+        # test matrix with too few rows
+        @test_throws ErrorException DA._whiten_data!(zeros(T,p,p), 1)
+        @test_throws ErrorException DA._whiten_data!(zeros(T,p,p), 2)
+        
+        # test singular matrix
+        @test_throws ErrorException DA._whiten_data!(zeros(T,n,p), 1)
+        @test_throws ErrorException DA._whiten_data!(zeros(T,p,n), 2)
+        
+        # test whitening 
+        X = T[diagm(0 => ones(T, p));
+              rand(n-p, p) .- 0.5]
+        X .= X .- mean(X, dims=1)  # Data must be centered
+        Xt = copy(transpose(X))
+
+        ### rows
+        X_test = copy(X)
+        W = DA._whiten_data!(X_test, 1)
+        @test isapprox(cov(X*W, dims=1), diagm(0 => ones(T, p)))
+
+        ### cols
+        Xt_test = copy(Xt)
+        W = DA._whiten_data!(Xt_test, 2)
+        @test isapprox(cov(W*Xt, dims=2), diagm(0 => ones(T, p)))
     end
 end
