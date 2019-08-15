@@ -2,7 +2,7 @@
 dim_error(s) = throw(DimensionMismatch(s))
 arg_error(s) = throw(ArgumentError(s))
 
-function _class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:Int}) where T
+function class_stats!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:Int}) where T
     n, p = size(X)
     k, pₘ = size(M)
     l = length(y)
@@ -25,29 +25,53 @@ function _class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:I
     end
 
     all(nₖ .> 1) || error("must have at least two observations per class")
-    
-    return broadcast!(/, M, M, nₖ)
+    broadcast!(/, M, M, nₖ)
+
+    return nₖ
 end
 
-function _class_means(X::AbstractMatrix{T}, y::Vector{<:Int}; dims::Integer=1, 
-                      k::Integer=maximum(y)) where T
+function class_stats(X::AbstractMatrix{T}, y::Vector{<:Integer}, dims::Integer=1, 
+                     k::Integer=maximum(y)) where T
     dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $(dims))"))
 
-    if dims == 1  # rows
-        M = Array{T}(undef, k, size(X, 2))
-        return _class_means!(M, X, y)
-    else  # columns
+    if dims == 1
+        M = zeros(T, k, size(X,2))
+        nₖ = class_stats!(M, X, y)
+        return (M, nₖ)
+    else
         p, n = size(X)
         l = length(y)
 
         n == l || dim_error("the number of columns in X must match the length y (got " * 
                             "$(n) and $(l))")
-        
-        M = Array{T}(undef, p, k)
-        _class_means!(transpose(M), transpose(X), y)
-        return M
+
+        M = zeros(T, p, k)
+        nₖ = class_stats!(transpose(M), transpose(X), y)
+
+        return (M, nₖ)
     end
 end
+
+
+#function _class_means(X::AbstractMatrix{T}, y::Vector{<:Int}; dims::Integer=1, 
+#                      k::Integer=maximum(y)) where T
+#    dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $(dims))"))
+#
+#    if dims == 1  # rows
+#        M = Array{T}(undef, k, size(X, 2))
+#        return _class_means!(M, X, y)
+#    else  # columns
+#        p, n = size(X)
+#        l = length(y)
+#
+#        n == l || dim_error("the number of columns in X must match the length y (got " * 
+#                            "$(n) and $(l))")
+#        
+#        M = Array{T}(undef, p, k)
+#        _class_means!(transpose(M), transpose(X), y)
+#        return M
+#    end
+#end
 
 
 """
@@ -144,7 +168,7 @@ _whiten_data!(X::Matrix{T})
 
 Generate whitening transform matrix for centered data matrix X
 """
-function _whiten_data!(X::Matrix{T}, dims::Int) where T
+function _whiten_data!(X::Matrix{T}, dims::Integer) where T
     dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
     n = size(X, dims)
     p = size(X, dims == 1 ? 2 : 1)
@@ -180,7 +204,7 @@ function _whiten_data!(X::Matrix{T}, dims::Int) where T
 end
 
 
-function _whiten_data!(X::Matrix{T}, γ::T, dims::Int; atol::T = zero(T),
+function _whiten_data!(X::Matrix{T}, γ::T, dims::Integer; atol::T = zero(T),
                        rtol::T = (eps(one(T))*min(size(X)...))*iszero(atol)) where T
     0 ≤ γ ≤ 1 || error("γ must be in the interval [0,1] (got $(γ))")
     dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
