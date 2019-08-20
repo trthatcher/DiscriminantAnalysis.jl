@@ -8,11 +8,11 @@ function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:In
     k, pₘ = size(M)
     l = length(y)
     
-    p == pₘ || dim_error("the number of columns in X must match the number of columns in " *
-                         "centroids matrix M (got $(p) and $(pₘ))")
+    p == pₘ || dim_error("the number of columns in data matrix X must match the number " *
+                         "of columns in centroids matrix M (got $(p) and $(pₘ))")
     
-    n == l || dim_error("the number of rows in X must match the length y (got $(n) and " *
-                        "$(l))")
+    n == l || dim_error("the number of rows in data matrix X must match the length of " *
+                        "class index vector y (got $(n) and $(l))")
            
     M .= zero(T)
     nₖ = zeros(Int, k)  # track counts to ensure an observation for each class
@@ -41,8 +41,8 @@ function class_means(X::AbstractMatrix{T}, y::Vector{<:Integer}, dims::Integer=1
         p, n = size(X)
         l = length(y)
 
-        n == l || dim_error("the number of columns in X must match the length y (got " * 
-                            "$(n) and $(l))")
+        n == l || dim_error("the number of columns in data matrix X must match the " * 
+                            "length of class index vector y (got $(n) and $(l))")
 
         M = zeros(T, p, k)
         class_means!(transpose(M), transpose(X), y)
@@ -107,8 +107,8 @@ function center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix,
         p == pₘ || dim_error("the number of rows in X must match the number of rows in M " *
                              "(got $(p) and $(pₘ))")
 
-        n == l || dim_error("the number of columns in X must match the length y (got " * 
-                            "$(n) and $(l))")
+        n == l || dim_error("the number of rows in data matrix X must match the length " *
+                            "of class index vector y (got $(n) and $(l))")
 
         center_classes!(transpose(X), y, transpose(M))
         return X

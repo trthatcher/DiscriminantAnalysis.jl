@@ -1,3 +1,25 @@
+# Linear Discriminant Analysis
+
+function canonical_coordinates(M::Matrix{T}, W::Matrix{T}, dims::Integer) where T
+    dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $(dims))")
+    k = size(M, dims)
+    p = size(M, dims == 1 ? 2 : 1)
+
+    all(size(W) .== p) || dim_error("W must match dimensions of M")
+
+    d = min(k-1, p)
+
+    if dims == 1
+        UDVᵀ = svd!(M*W, full=false)
+        Cᵀ = view(UDVᵀ.Vt, 1:d, :)
+    else
+        UDVᵀ = svd!(W*M, full=false)
+        Cᵀ = view(UDVᵀ.U, :, 1:d)
+    end
+
+    return transpose(Cᵀ)
+end
+
 mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     "whether the model has been fit"
     fit::Bool
@@ -13,9 +35,9 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     C::Union{Nothing,Matrix{T}}
     "Shrinkage parameter"
     γ::Union{Nothing,T}
-    function LinearDiscriminantModel{T}(M::AbstractMatrix, π::AbstractVector, 
-                                        dims::Integer=1, γ::Union{Nothing,Real}=nothing,
-                                        canonical::Bool=false) where T
+    function LinearDiscriminantModel{T}(M::AbstractMatrix, π::AbstractVector; 
+                                        dims::Integer=1, canonical::Bool=false,
+                                        gamma::Union{Nothing,Real}=nothing) where T
         dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $dims)")
 
         k = size(M, dims)
@@ -26,8 +48,8 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
                              (dims == 1 ? "rows" : "columns") * " of centroid matrix M " *
                              "(got $(kₚ) and $(k))")
 
-        if γ !== Nothing
-            0 ≤ γ ≤ 1 || dom_error(γ, "γ must be in the interval [0,1]")
+        if gamma !== Nothing
+            0 ≤ gamma ≤ 1 || dom_error(gamma, "γ must be in the interval [0,1]")
         end
 
         total = sum(π)
@@ -47,28 +69,12 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     end
 end
 
-function canonical_coordinates(M::Matrix{T}, W::Matrix{T}, dims::Integer) where T
-    dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $dims)")
-    k = size(M, dims)
-    p = size(M, dims == 1 ? 2 : 1)
-
-    all(size(W) .== p) || dim_error("W must match dimensions of M")
-
-    d = min(k-1, p)
-
-    if dims == 1
-        UDVᵀ = svd!(M*W, full=false)
-        Cᵀ = view(UDVᵀ.Vt, 1:d, :)
-    else
-        UDVᵀ = svd!(W*M, full=false)
-        Cᵀ = view(UDVᵀ.U, :, 1:d)
-    end
-
-    return transpose(Cᵀ)
-end
 
 """
-X is not centered, M is known
+    fit!(LDA::LinearDiscriminantModel, y::Vector, X::Matrix)
+
+Fit a linear discriminant model based on data matrix `X` and class index vector `y`. `LDA` 
+will be updated in-place and `X` will be overwritten during the fitting process.
 """
 function fit!(LDA::LinearDiscriminantModel{T}, y::Vector{<:Integer}, X::Matrix{T}) where T
     center_classes!(X, y, LDA.M, LDA.dims)
@@ -91,6 +97,23 @@ function fit!(LDA::LinearDiscriminantModel{T}, y::Vector{<:Integer}, X::Matrix{T
     return LDA
 end
 
+"""
+    fit(::Type{LinearDiscriminantModel}, Y::Matrix, X::Matrix; dims::Integer=1, <keyword arguments>...)
+
+Fit a linear discriminant model based on data matrix `X` and class indicator matrix `Y` 
+along dimensions `dims`.
+
+# Keyword arguments
+- `canonical::Bool=false`: computes canonical coordinates and performs dimensionality
+reduction if `true`
+- `centroids::Matrix`: specifies the class centroids. If `dims` is `1`, then each row 
+represents a class centroid, otherwise each column represents a class centroid. If not 
+specified, the centroids are computed from the data.
+- `priors::Vector`: specifies the class membership prior probabilties. If not specified, 
+the class probabilities a computed based on the class counts
+- `gamma::Real=0`: regularization parameter γ ∈ [0,1] shrinks the within-class covariance 
+matrix towards the identity matrix scaled by the average eigenvalue of the covariance matrix
+"""
 function fit(::Type{LinearDiscriminantModel{T}},
         Y::AbstractMatrix,
         X::AbstractMatrix;
@@ -127,3 +150,69 @@ function fit(::Type{LinearDiscriminantModel{T}},
 
     fit!(LDA, y, X)
 end
+
+function fit(::Type{LinearDiscriminantModel},
+        Y::AbstractMatrix,
+        X::AbstractMatrix{T};
+        dims::Integer=1,
+        canonical::Bool=false,
+        centroids::Union{Nothing,AbstractMatrix}=nothing, 
+        priors::Union{Nothing,AbstractVector}=nothing,
+        gamma::Union{Nothing,Real}=nothing
+    ) where T
+    fit(LinearDiscriminantModel{T}, Y, X, dims=dims, canonical=canonical, 
+        centroids=centroids, priors=priors, gamma=gamma)
+end
+
+function discriminants!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matrix{T}; 
+                        dims::Integer=1) where T
+    dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $(dims))")
+
+    M = LDA.M
+    W = LDA.W
+
+    if dims == 1
+        k, p = size(M)
+        n = size(Δ, 1)
+
+        size(Δ, 2) == k || dim_error("the number of columns in discriminant matrix Δ " *
+                                     "must match the number of classes")
+
+        size(X, 2) == p || dim_error("the number of columns in data matrix X must match " *
+                                     "the number of columns in centroid matrix M")
+
+        size(X, 1) == n || dim_error("the number of rows in data matrix X must match the " *
+                                     "number of rows in discriminant matrix Δ")
+
+        XW = X*W
+        MW = M*W
+        Z = similar(XW)
+        for j = 1:k
+            broadcast!(-, Z, XW, MW[j, :])
+            sum!(abs2, Δ[:, j], Z)
+        end
+    else
+        p, k = size(M)
+        n = size(Δ, 2)
+
+        size(Δ, 1) == k || dim_error("")
+
+        size(X, 1) == p || dim_error("")
+
+        size(X, 2) == n || dim_error("")
+
+        WX = W*X
+        WM = W*M
+        Z = similar(XW)
+        for i = 1:k
+            broadcast!(-, Z, WX, WM[:, i])
+            sum!(abs2, Δ[i, :], Z)
+        end
+    end
+
+    return Δ
+end
+
+#function discriminants!(LDA::LinearDiscriminantModel{T}, X::Matrix{T}; 
+#                        dims::Integer=1) where T
+#    Δ = Array{T}(undef, dims == 1 ? )
