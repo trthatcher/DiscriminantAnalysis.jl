@@ -1,19 +1,24 @@
 # Linear Discriminant Analysis
 
-function canonical_coordinates(M::Matrix{T}, W::Matrix{T}, dims::Integer) where T
+function canonical_coordinates(M::AbstractMatrix{T}, W::AbstractMatrix{T}, π::Vector{T},
+                               dims::Integer) where T
     dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $(dims))")
     k = size(M, dims)
     p = size(M, dims == 1 ? 2 : 1)
+
+    length(π) == k || dim_error("")
 
     all(size(W) .== p) || dim_error("W must match dimensions of M")
 
     d = min(k-1, p)
 
     if dims == 1
-        UDVᵀ = svd!(M*W, full=false)
+        MW = (sqrt.(π) .* M)*W
+        UDVᵀ = svd!(MW, full=false)
         Cᵀ = view(UDVᵀ.Vt, 1:d, :)
     else
-        UDVᵀ = svd!(W*M, full=false)
+        WM = W*(transpose(sqrt.(π)) .* M)
+        UDVᵀ = svd!(WM, full=false)
         Cᵀ = view(UDVᵀ.U, :, 1:d)
     end
 

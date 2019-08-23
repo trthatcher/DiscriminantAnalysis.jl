@@ -1,4 +1,4 @@
-# Introduction
+# Discriminant Analysis
 
 **DiscriminantAnalysis.jl** is a Julia package for multiple linear and quadratic 
 regularized discriminant analysis (LDA & QDA respectively). LDA and QDA are
@@ -15,7 +15,8 @@ See the [theory section](theory.md) of the documentation for an overview of the 
 
 ## Installation
 
-To add the package from the Julia REPL, enter the package manager with `]`:
+To add the latest release of the package from the Julia REPL, enter the package manager 
+with `]` and type the following:
 
 ```bash
 (v1.1) pkg> add DiscriminantAnalysis
