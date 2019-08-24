@@ -1,34 +1,9 @@
 # Linear Discriminant Analysis
 
-function canonical_coordinates(M::AbstractMatrix{T}, W::AbstractMatrix{T}, π::Vector{T},
-                               dims::Integer) where T
-    dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $(dims))")
-    k = size(M, dims)
-    p = size(M, dims == 1 ? 2 : 1)
-
-    length(π) == k || dim_error("")
-
-    all(size(W) .== p) || dim_error("W must match dimensions of M")
-
-    d = min(k-1, p)
-
-    if dims == 1
-        MW = (sqrt.(π) .* M)*W
-        UDVᵀ = svd!(MW, full=false)
-        Cᵀ = view(UDVᵀ.Vt, 1:d, :)
-    else
-        WM = W*(transpose(sqrt.(π)) .* M)
-        UDVᵀ = svd!(WM, full=false)
-        Cᵀ = view(UDVᵀ.U, :, 1:d)
-    end
-
-    return transpose(Cᵀ)
-end
-
 mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
-    "whether the model has been fit"
+    "Model fit indicator"
     fit::Bool
-    "Dimensions"
+    "Dimension along which observations are stored (1 for rows, 2 for columns)"
     dims::Int
     "Whitening matrix for overall covariance matrix"
     W::AbstractMatrix{T}
@@ -36,43 +11,95 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     M::Matrix{T}
     "Vector of class prior probabilities"
     π::Vector{T}
-    "Subspace basis vectors reduced dimensions in canonical discriminant models"
+    "Canonical coordinates"
     C::Union{Nothing,Matrix{T}}
+    "Canonical coordinates with whitening"
+    A::Union{Nothing,Matrix{T}}
     "Shrinkage parameter"
     γ::Union{Nothing,T}
     function LinearDiscriminantModel{T}(M::AbstractMatrix, π::AbstractVector; 
                                         dims::Integer=1, canonical::Bool=false,
                                         gamma::Union{Nothing,Real}=nothing) where T
-        dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $dims)")
+        k, p = check_centroid_dims(M, π, dims)
 
-        k = size(M, dims)
-        p = size(M, dims == 1 ? 2 : 1)
-        kₚ = length(π)
+        k ≥ 1 || error("must have at least two classes")
 
-        k == kₚ || dim_error("the length of class priors π should match the number of " *
-                             (dims == 1 ? "rows" : "columns") * " of centroid matrix M " *
-                             "(got $(kₚ) and $(k))")
+        check_priors(π)
 
-        if gamma !== Nothing
-            0 ≤ gamma ≤ 1 || dom_error(gamma, "γ must be in the interval [0,1]")
+        if gamma !== nothing
+            0 ≤ gamma ≤ 1 || throw(DomainError(gamma, "γ must be in the interval [0,1]"))
         end
-
-        total = sum(π)
-        isapprox(total, one(T)) || arg_error("class priors π must sum to 1 (got $(total))")
-        all(π .≥ 0) || arg_error("all class priors πₖ must be non-negative probabilities")
 
         W = zeros(T, p, p)
 
         if canonical
             d = min(k-1, p)
             C = dims == 1 ? zeros(T, p, d) : zeros(T, d, p)
+            A = copy(C)
         else
             C = nothing
+            A = nothing
         end
 
-        new{T}(false, dims, W, M, π, C, γ)
+        new{T}(false, dims, W, M, π, C, A, gamma)
     end
 end
+
+function canonical_coordinates!(LDA::LinearDiscriminantModel)
+    M = copy(LDA.M)
+    k, p = check_dims(M, LDA.dims)
+
+    π = LDA.π
+
+    if p ≤ k-1
+        # no dimensionality reduction is possible
+        C = I
+    elseif LDA.dims == 1
+        # Σ = Mᵀdiag(π)M so need to scale by sqrt π
+        broadcast!((a,b) -> a*√(b), M, M, π)
+        UDVᵀ = svd!(M*W, full=false)
+        C = transpose(view(UDVᵀ.Vt, 1:k-1, :))
+    else
+        broadcast!((a,b) -> a*√(b), M, M, transpose(π))
+        UDVᵀ = svd!(W*M, full=false)
+        C = transpose(view(UDVᵀ.U, :, 1:k-1))
+    end
+
+    copyto!(LDA.C, C)
+
+    if LDA.dims == 1
+        mul!(LDA.A, LDA.W, LDA.C)
+    else
+        mul!(LDA.A, LDA.C, LDA.W)
+    end
+
+    return LDA
+end
+
+#function canonical_coordinates(M::AbstractMatrix{T}, W::AbstractMatrix{T}, π::Vector{T},
+#                               dims::Integer) where T
+#    dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $(dims))")
+#    k = size(M, dims)
+#    p = size(M, dims == 1 ? 2 : 1)
+#
+#    length(π) == k || dim_error("")
+#
+#    all(size(W) .== p) || dim_error("W must match dimensions of M")
+#
+#    d = min(k-1, p)
+#
+#    if dims == 1
+#        MW = (sqrt.(π) .* M)*W
+#        UDVᵀ = svd!(MW, full=false)
+#        Cᵀ = view(UDVᵀ.Vt, 1:d, :)
+#    else
+#        WM = W*(transpose(sqrt.(π)) .* M)
+#        UDVᵀ = svd!(WM, full=false)
+#        Cᵀ = view(UDVᵀ.U, :, 1:d)
+#    end
+#
+#    return transpose(Cᵀ)
+#end
 
 
 """

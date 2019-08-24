@@ -1,3 +1,38 @@
+@testset "LinearDiscriminantModel" begin
+    for T in (Float32, Float64)
+        LDM = DA.LinearDiscriminantModel{T}
+
+        # test dims argument
+        @test_throws ArgumentError LDM(zeros(T, 3, 3), ones(T, 3)/3, dims=0)
+        @test_throws ArgumentError LDM(zeros(T, 3, 3), ones(T, 3)/3, dims=3)
+
+        # test class priors length/number of classes
+        @test_throws DimensionMismatch LDM(zeros(T, 3, 2), ones(T, 2)/2, dims=1)
+        @test_throws DimensionMismatch LDM(zeros(T, 3, 2), ones(T, 4)/4, dims=1)
+
+        @test_throws DimensionMismatch LDM(zeros(T, 2, 3), ones(T, 2)/2, dims=2)
+        @test_throws DimensionMismatch LDM(zeros(T, 2, 3), ones(T, 4)/4, dims=2)
+
+        # test gamma values
+        lb = zero(T) - eps(zero(T))
+        ub = one(T) + eps(one(T))
+
+        @test_throws DomainError LDM(zeros(T, 3, 1), ones(T, 3)/3, dims=1, gamma=lb)
+        @test_throws DomainError LDM(zeros(T, 3, 1), ones(T, 3)/3, dims=1, gamma=ub)
+
+        # test prior probabilities
+        @test_throws ArgumentError LDM(zeros(T, 3, 1), T[0.3; 0.3; 0.3], dims=1)
+        @test_throws ArgumentError LDM(zeros(T, 3, 1), T[0.4; 0.4; 0.4], dims=1)
+
+        @test_throws DomainError LDM(zeros(T, 3, 1), T[1.0; 0.5; -0.5], dims=1)
+        @test_throws DomainError LDM(zeros(T, 3, 1), T[1.0; 0.5; -0.5], dims=1)
+
+        @test_throws DomainError LDM(zeros(T, 3, 1), T[0.5; 0.5; 0.0], dims=1)
+        @test_throws DomainError LDM(zeros(T, 3, 1), T[0.5; 0.5; 0.0], dims=1)
+    end
+end
+
+
 @testset "canonical_coordinates(M, W, dims)" begin
     p = 3
     k = 3

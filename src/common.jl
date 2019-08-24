@@ -1,18 +1,81 @@
-# Error shortcuts
-dim_error(s) = throw(DimensionMismatch(s))
-arg_error(s) = throw(ArgumentError(s))
-dom_error(v, s) = throw(DomainError(v, s))
+# Common Functions
+
+### Dimensionality Checks
+
+function check_dims(X::AbstractMatrix, dims::Integer)
+    dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
+
+    n = size(X, dims)
+    p = size(X, dims == 1 ? 2 : 1)
+
+    return (n, p)
+end
+
+function check_centroid_dims(M::AbstractMatrix, X::AbstractMatrix, dims::Integer)
+    n, p = check_dims(X, dims)
+    k, pₘ = check_dims(M, dims)
+    
+    if p != pₘ
+        rc = dims == 1 ? "columns" : "rows"
+        msg = "the number of $(rc) in centroid matrix M must match the number of $(rc) " *
+              "in data matrix X (got $(pₘ) and $(p))"
+
+        throw(DimensionMismatch(msg))
+    end
+
+    return (n, p, k)
+end
+
+function check_centroid_dims(M::AbstractMatrix, π::AbstractVector, dims::Integer)
+    k, p = check_dims(M, dims)
+    l = length(π)
+
+    if k != l
+        rc = dims == 1 ? "columns" : "rows"
+        msg = "the number of $(rc) in centroid matrix M must match the legth of class " *
+              "index vector y (got $(k) and $(l))"
+
+        throw(DimensionMismatch(msg))
+    end
+
+    return (k, p)
+end
+
+function check_data_dims(X::AbstractMatrix, y::AbstractVector, dims::Integer)
+    n, p = check_dims(X, dims)
+    l = length(y)
+
+    if n != l
+        rc = dims == 1 ? "rows" : "columns"
+        msg = "the number of $(rc) in data matrix X must match the length of class index " *
+              "vector y (got $(p) and $(l))"
+
+        throw(DimensionMismatch(msg))
+    end
+
+    return n, p
+end
+
+function check_priors(π::Vector{T}) where T
+    total = sum(π)
+
+    if !isapprox(total, one(T))
+        throw(ArgumentError("class priors π must sum to 1 (got $(total))"))
+    end
+
+    if any(π .≤ 0)
+        throw(DomainError(π, "all class priors πₖ must be positive probabilities"))
+    end
+
+    return length(π)
+end
+
+
+### Class Calculations
 
 function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:Int}) where T
-    n, p = size(X)
-    k, pₘ = size(M)
-    l = length(y)
-    
-    p == pₘ || dim_error("the number of columns in data matrix X must match the number " *
-                         "of columns in centroids matrix M (got $(p) and $(pₘ))")
-    
-    n == l || dim_error("the number of rows in data matrix X must match the length of " *
-                        "class index vector y (got $(n) and $(l))")
+    n, p, k = check_centroid_dims(M, X, 1)
+    check_data_dims(X, y, 1)
            
     M .= zero(T)
     nₖ = zeros(Int, k)  # track counts to ensure an observation for each class
@@ -33,16 +96,10 @@ end
 
 function class_means(X::AbstractMatrix{T}, y::Vector{<:Integer}, dims::Integer=1, 
                      k::Integer=maximum(y)) where T
-    dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $(dims))")
-
     if dims == 1
-        return class_means!(zeros(T, k, size(X,2)), X, y)
+        return class_means!(zeros(T, k, size(X, 2)), X, y)
     else
-        p, n = size(X)
-        l = length(y)
-
-        n == l || dim_error("the number of columns in data matrix X must match the " * 
-                            "length of class index vector y (got $(n) and $(l))")
+        n, p = check_data_dims(X, y, dims)
 
         M = zeros(T, p, k)
         class_means!(transpose(M), transpose(X), y)
@@ -56,7 +113,7 @@ function class_counts(y::Vector{<:Integer}, k::Integer=maximum(y))
 
     for i = 1:length(y)
         kᵢ = y[i]
-        1 ≤ kᵢ ≤ k || arg_error("class index must be between 1 and $(k) (got $(kᵢ))")
+        1 ≤ kᵢ ≤ k || throw(BoundsError(nₖ, kᵢ))
         nₖ[kᵢ] += 1
     end
 
@@ -68,15 +125,8 @@ end
 _center_classes!(X, y, M)
 """
 function center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix)
-    n, p = size(X)
-    k, pₘ = size(M)
-    l = length(y)
-
-    p == pₘ || dim_error("the number of columns in data matrix X must match the number " *
-                         "of columns in centroid matrix M (got $(p) and $(pₘ))")
-    
-    n == l || dim_error("the number of rows in X must match the length y (got $(n) and " *
-                        "$(l))")
+    n, p, k = check_centroid_dims(M, X, 1)
+    check_data_dims(X, y, 1)
     
     for i = 1:n
         kᵢ = y[i]
@@ -95,22 +145,14 @@ _center_classes!(X, y, M, dims)
 """
 function center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix, 
                          dims::Integer)
-    dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
-
     if dims == 1
         return center_classes!(X, y, M)
     else
-        p, n = size(X)
-        pₘ, k = size(M)
-        l = length(y)
-
-        p == pₘ || dim_error("the number of rows in X must match the number of rows in M " *
-                             "(got $(p) and $(pₘ))")
-
-        n == l || dim_error("the number of rows in data matrix X must match the length " *
-                            "of class index vector y (got $(n) and $(l))")
+        n, p, k = check_centroid_dims(M, X, dims)
+        check_data_dims(X, y, 2)
 
         center_classes!(transpose(X), y, transpose(M))
+
         return X
     end
 end
@@ -122,8 +164,10 @@ end
 function regularize!(Σ₁::AbstractMatrix{T}, Σ₂::AbstractMatrix{T}, λ::T) where {T}
     (m = size(Σ₁, 1)) == size(Σ₂, 1) || throw(DimensionMismatch(""))
     (n = size(Σ₁, 2)) == size(Σ₂, 2) || throw(DimensionMismatch(""))
-    m == n || dim_error("matrices Σ₁ and Σ₂ must be square")
-    0 ≤ λ ≤ 1 || dom_error(λ, "λ must be in the interval [0,1]")
+
+    m == n || throw(DimensionMismatch("matrices Σ₁ and Σ₂ must be square"))
+
+    0 ≤ λ ≤ 1 || throw(DomainError(λ, "λ must be in the interval [0,1]"))
 
     for ij in eachindex(Σ₁)
         Σ₁[ij] = (1-λ)*Σ₁[ij] + λ*Σ₂[ij]
@@ -140,6 +184,7 @@ Shrink `Σ` matrix towards the average eigenvalue multiplied by the identity mat
 """
 function regularize!(Σ::AbstractMatrix{T}, γ::T) where {T}
     (p = size(Σ, 1)) == size(Σ, 2) || throw(DimensionMismatch("Σ must be square"))
+
     0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ must be in the interval [0,1]"))
 
     a =  γ*tr(Σ)/p  # Average eigenvalue scaled by γ
@@ -159,11 +204,10 @@ whiten_data!(X::Matrix{T})
 Generate whitening transform matrix for centered data matrix X
 """
 function whiten_data!(X::Matrix{T}, dims::Integer) where T
-    dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
-    n = size(X, dims)
-    p = size(X, dims == 1 ? 2 : 1)
+    n, p = check_dims(X, dims)
+
     n > p || error("insufficient number of within-class observations to produce a full " *
-                   "rank covariance matrix ($(n) observation, $(p) predictors)")
+                   "rank covariance matrix ($(n) observations, $(p) predictors)")
 
     if dims == 1
         # X = QR ⟹ S = XᵀX = RᵀR
@@ -178,7 +222,7 @@ function whiten_data!(X::Matrix{T}, dims::Integer) where T
     catch err
         if isa(err, LAPACKException) || isa(err, SingularException)
             if err.info ≥ 1
-                error("rank deficiency (collinearity) detected")
+                error("rank deficiency detected (collinearity in predictors)")
             end
         end
         throw(err)
@@ -196,12 +240,13 @@ end
 
 function whiten_data!(X::Matrix{T}, γ::T, dims::Integer; atol::T = zero(T),
                       rtol::T = (eps(one(T))*min(size(X)...))*iszero(atol)) where T
-    0 ≤ γ ≤ 1 || error("γ must be in the interval [0,1] (got $(γ))")
-    dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
-    n = size(X, dims)
-    p = size(X, dims == 1 ? 2 : 1)
+    n, p = check_dims(X, dims)
+    
     n > p || error("insufficient number of within-class observations to produce a full " *
-                   "rank covariance matrix ($(n) observation, $(p) predictors)")
+                   "rank covariance matrix ($(n) observations, $(p) predictors)")
+    
+    0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ must be in the interval [0,1]"))
+
 
     UDVᵀ = svd!(X, full=false)  # Vᵀ from thin SVD will be n×n since m > n
 
@@ -234,7 +279,8 @@ end
 
 function whiten_cov!(Σ::AbstractMatrix{T}, γ::T=zero(T)) where T
     (p = size(Σ, 1)) == size(Σ, 2) || throw(DimensionMismatch("Σ must be square"))
-    0 ≤ γ ≤ 1 || error("γ must be in the interval [0,1] (got $(γ))")
+
+    0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ must be in the interval [0,1]"))
     
     if γ != 0
         regularize!(Σ, γ)
