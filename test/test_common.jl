@@ -1,3 +1,91 @@
+# Dimensionality Checks
+
+@testset "check_dims(X, dims)" begin
+    n = 20
+    p = 5
+    for T in (Float32, Float64)
+        @test_throws ArgumentError DA.check_dims(zeros(T, p, p), 0)
+        @test_throws ArgumentError DA.check_dims(zeros(T, p, p), 3)
+
+        @test (n, p) == DA.check_dims(zeros(T, n, p), 1)
+        @test (n, p) == DA.check_dims(zeros(T, p, n), 2)
+        @test (n, p) == DA.check_dims(transpose(zeros(T, n, p)), 2)
+    end
+end
+
+@testset "check_centroid_dims(M, X, dims)" begin
+    n = 20
+    p = 5
+    k = 3
+    for T in (Float32, Float64)
+        X = zeros(T, n, p)
+        M = zeros(T, k, p)
+
+        @test_throws ArgumentError DA.check_centroid_dims(M, X, 0)
+        @test_throws ArgumentError DA.check_centroid_dims(M, X, 3)
+
+        # check parameter dimensionality for row-based data
+
+        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k, p+1), X, 1)
+        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k, p-1), X, 1)
+
+        @test_throws DimensionMismatch DA.check_centroid_dims(M, zeros(T, n, p+1), 1)
+        @test_throws DimensionMismatch DA.check_centroid_dims(M, zeros(T, n, p-1), 1)
+
+        @test (n, p, k) == DA.check_centroid_dims(M, X, 1)
+
+        # check parameter dimensionality for column-based data
+
+        Xt = transpose(X)
+        Mt = transpose(M)
+
+        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, p+1, k), Xt, 2)
+        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, p-1, k), Xt, 2)
+
+        @test_throws DimensionMismatch DA.check_centroid_dims(Mt, zeros(T, p+1, n), 2)
+        @test_throws DimensionMismatch DA.check_centroid_dims(Mt, zeros(T, p-1, n), 2)
+
+        @test (n, p, k) == DA.check_centroid_dims(Mt, Xt, 2)
+    end
+end
+
+@testset "check_centroid_dims(M, π, dims)" begin
+    k = 3
+    p = 5
+    for T in (Float32, Float64)
+        M = zeros(T, k, p)
+        π = zeros(T, k)
+
+        @test_throws ArgumentError DA.check_centroid_dims(M, π, 0)
+        @test_throws ArgumentError DA.check_centroid_dims(M, π, 3)
+
+        # check parameter dimensionality for row-based data
+
+        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k+1, p), π, 1)
+        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k-1, p), π, 1)
+
+        @test_throws DimensionMismatch DA.check_centroid_dims(M, zeros(T, k+1), 1)
+        @test_throws DimensionMismatch DA.check_centroid_dims(M, zeros(T, k-1), 1)
+
+        @test (k, p) == DA.check_centroid_dims(M, π, 1)
+
+        # check parameter dimensionality for column-based data
+
+        Mt = transpose(M)
+
+        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k+1, p), π, 2)
+        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k-1, p), π, 2)
+
+        @test_throws DimensionMismatch DA.check_centroid_dims(Mt, zeros(T, k+1), 2)
+        @test_throws DimensionMismatch DA.check_centroid_dims(Mt, zeros(T, k-1), 2)
+
+        @test (k, p) == DA.check_centroid_dims(Mt, π, 2)
+    end
+end
+
+
+# Class operations
+
 @testset "class_means!(M, X, y)" begin
     n = 10
     p = 3
