@@ -48,7 +48,7 @@ function check_data_dims(X::AbstractMatrix, y::AbstractVector, dims::Integer)
     if n != l
         rc = dims == 1 ? "rows" : "columns"
         msg = "the number of $(rc) in data matrix X must match the length of class index " *
-              "vector y (got $(p) and $(l))"
+              "vector y (got $(n) and $(l))"
 
         throw(DimensionMismatch(msg))
     end

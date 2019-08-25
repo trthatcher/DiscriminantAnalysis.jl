@@ -83,15 +83,67 @@ end
     end
 end
 
+@testset "check_data_dims(X, y, dims)" begin
+    n = 10
+    p = 5
+    for T in (Float32, Float64)
+        X = zeros(T, n, p)
+        y = zeros(Int, n)
+
+        @test_throws ArgumentError DA.check_data_dims(X, y, 0)
+        @test_throws ArgumentError DA.check_data_dims(X, y, 3)
+
+        # check parameter dimensionality for row-based data
+
+        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, n+1, p), y, 1)
+        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, n-1, p), y, 1)
+
+        @test_throws DimensionMismatch DA.check_data_dims(X, zeros(Int, n+1), 1)
+        @test_throws DimensionMismatch DA.check_data_dims(X, zeros(Int, n-1), 1)
+
+        @test (n, p) == DA.check_data_dims(X, y, 1)
+
+        # check parameter dimensionality for column-based data
+
+        Xt = transpose(X)
+
+        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, p, n+1), y, 2)
+        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, p, n-1), y, 2)
+
+        @test_throws DimensionMismatch DA.check_data_dims(Xt, zeros(Int, n+1), 2)
+        @test_throws DimensionMismatch DA.check_data_dims(Xt, zeros(Int, n-1), 2)
+
+        @test (n, p) == DA.check_data_dims(Xt, y, 2)
+    end
+end
+
+@testset "check_priors(X, π)" begin
+    k = 10
+    for T in (Float32, Float64)
+        # Check totals
+        @test_throws ArgumentError DA.check_priors(T[0.3; 0.3; 0.3])
+        @test_throws ArgumentError DA.check_priors(T[0.4; 0.4; 0.4])
+
+        # Check probability domain
+        @test_throws DomainError DA.check_priors(T[1.0; -0.5; 0.5])
+
+        # Test valid π
+        π = rand(T, k)
+        broadcast!(/, π, π, sum(π))
+
+        @test k == DA.check_priors(π)
+    end
+end
 
 # Class operations
 
 @testset "class_means!(M, X, y)" begin
-    n = 10
+    nₖ = [45, 55]
+    n = sum(nₖ)
     p = 3
 
     for T in (Float32, Float64)
-        X, y, M = generate_data(T, n, p)
+        X, y, M = random_data(T, nₖ, p)
         Xt = transpose(copy(transpose(X)))
         Mt = transpose(copy(transpose(M)))
         
@@ -139,11 +191,12 @@ end
 end
 
 @testset "class_means(X, y[, dims[, k]])" begin
-    n = 10
+    nₖ = [45, 55]
+    n = sum(nₖ)
     p = 3
 
     for T in (Float32, Float64)
-        X, y, M = generate_data(T, n, p)
+        X, y, M = random_data(T, nₖ, p)
         Xt = copy(transpose(X))
 
         # Check dims argument
@@ -184,12 +237,17 @@ end
     end
 end
 
+@testset "class_counts(y[, k])" begin
+
+end
+
 @testset "center_classes!(X, y, M)" begin
-    n = 10
+    nₖ = [45, 55]
+    n = sum(nₖ)
     p = 3
 
     for T in (Float32, Float64)
-        X, y, M = generate_data(T, n, p)
+        X, y, M = random_data(T, nₖ, p)
         Xtt = transpose(copy(transpose(X)))
         Mtt = transpose(copy(transpose(M)))
 
@@ -230,11 +288,12 @@ end
 end
 
 @testset "center_classes!(X, y, M, dims)" begin
-    n = 10
+    nₖ = [45, 55]
+    n = sum(nₖ)
     p = 3
 
     for T in (Float32, Float64)
-        X, y, M = generate_data(T, n, p)
+        X, y, M = random_data(T, nₖ, p)
         Xt = copy(transpose(X))
         Mt = copy(transpose(M))
 

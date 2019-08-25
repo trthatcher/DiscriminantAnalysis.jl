@@ -3,23 +3,30 @@ using Test, LinearAlgebra, Statistics, DiscriminantAnalysis
 const DA = DiscriminantAnalysis
 
 
-function generate_data(T::Type{<:AbstractFloat}, n::Int, p::Int)
-    ix = sortperm(rand(2n))
+function random_data(T::Type{<:AbstractFloat}, N::Vector{Int}, p::Int)
+    n = sum(N)
+    c = length(N)
 
-    y = repeat(1:2, inner = n)[ix]
+    X = zeros(T, n, p)
+    M = zeros(T, c, p)
 
-    X1 = rand(T, n, p)
-    X1 .-= mean(X1, dims = 1)
-    X1 .+= 1
-    X2 = rand(T, n, p)
-    X2 .-= mean(X2, dims = 1)
-    X2 .-= 1
-    
-    X = [X1; X2][ix, :]
+    ix = sortperm(rand(n))
 
-    M = [mean(X1, dims = 1); mean(X2, dims = 1)]
+    y = [k for (k, nₖ) in enumerate(N) for i = 1:nₖ][ix]
 
-    (X, y, M)
+    for (k, nₖ) in enumerate(N)
+        Xₖ = randn(T, nₖ, p)
+        Xₖ .-= mean(Xₖ, dims=1)
+
+        μ = transpose(T[rand() < 0.5 ? -2k : 2k for i = 1:p])
+
+        Xₖ .+= μ
+
+        X[y .== k, :] = Xₖ
+        M[k, :] = μ
+    end
+
+    return (X, y, M)
 end
 
 function random_cov(T::Type{<:AbstractFloat}, p::Integer)
