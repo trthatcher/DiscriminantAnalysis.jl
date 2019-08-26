@@ -45,6 +45,6 @@ end
     @info "Testing common.jl"
     include("test_common.jl")
 
-    #@info "Testing lda.jl"
-    #include("test_lda.jl")
+    @info "Testing lda.jl"
+    include("test_lda.jl")
 end

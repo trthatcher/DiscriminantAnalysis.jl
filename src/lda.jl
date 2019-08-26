@@ -7,6 +7,8 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     dims::Int
     "Whitening transform for overall covariance matrix"
     W::AbstractMatrix{T}
+    "Determinant of the covariance matrix"
+    detΣ::T
     "Matrix of class means (one per row/column depending on `dims`)"
     M::Matrix{T}
     "Vector of class prior probabilities"
@@ -20,9 +22,9 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     function LinearDiscriminantModel{T}(M::AbstractMatrix, π::AbstractVector; 
                                         dims::Integer=1, canonical::Bool=false,
                                         gamma::Union{Nothing,Real}=nothing) where T
-        k, p = check_centroid_dims(M, π, dims)
+        k, p = check_centroid_dims(M, π, dims=dims)
 
-        k ≥ 1 || error("must have at least two classes")
+        k ≥ 2 || error("must have at least two classes")
 
         check_priors(π)
 
@@ -41,7 +43,7 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
             A = nothing
         end
 
-        new{T}(false, dims, W, M, π, C, A, gamma)
+        new{T}(false, dims, W, zero(T), M, π, C, A, gamma)
     end
 end
 
