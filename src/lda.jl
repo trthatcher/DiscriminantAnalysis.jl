@@ -5,7 +5,7 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     fit::Bool
     "Dimension along which observations are stored (1 for rows, 2 for columns)"
     dims::Int
-    "Whitening matrix for overall covariance matrix"
+    "Whitening transform for overall covariance matrix"
     W::AbstractMatrix{T}
     "Matrix of class means (one per row/column depending on `dims`)"
     M::Matrix{T}

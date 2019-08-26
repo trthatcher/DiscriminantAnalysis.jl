@@ -2,7 +2,7 @@
 
 ### Dimensionality Checks
 
-function check_dims(X::AbstractMatrix, dims::Integer)
+function check_dims(X::AbstractMatrix; dims::Integer)
     dims ∈ (1, 2) || throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
 
     n = size(X, dims)
@@ -11,44 +11,44 @@ function check_dims(X::AbstractMatrix, dims::Integer)
     return (n, p)
 end
 
-function check_centroid_dims(M::AbstractMatrix, X::AbstractMatrix, dims::Integer)
-    n, p = check_dims(X, dims)
-    k, pₘ = check_dims(M, dims)
+function check_centroid_dims(M::AbstractMatrix, X::AbstractMatrix; dims::Integer)
+    n, p = check_dims(X, dims=dims)
+    m, p₂ = check_dims(M, dims=dims)
     
-    if p != pₘ
+    if p != p₂
         rc = dims == 1 ? "columns" : "rows"
         msg = "the number of $(rc) in centroid matrix M must match the number of $(rc) " *
-              "in data matrix X (got $(pₘ) and $(p))"
+              "in data matrix X (got $(p₂) and $(p))"
 
         throw(DimensionMismatch(msg))
     end
 
-    return (n, p, k)
+    return (n, p, m)
 end
 
-function check_centroid_dims(M::AbstractMatrix, π::AbstractVector, dims::Integer)
-    k, p = check_dims(M, dims)
-    l = length(π)
+function check_centroid_dims(M::AbstractMatrix, π::AbstractVector; dims::Integer)
+    m, p = check_dims(M, dims=dims)
+    m₂ = length(π)
 
-    if k != l
+    if m != m₂
         rc = dims == 1 ? "columns" : "rows"
-        msg = "the number of $(rc) in centroid matrix M must match the legth of class " *
-              "index vector y (got $(k) and $(l))"
+        msg = "the number of $(rc) in centroid matrix M must match the length of class " *
+              "index vector y (got $(m) and $(m₂))"
 
         throw(DimensionMismatch(msg))
     end
 
-    return (k, p)
+    return (m, p)
 end
 
-function check_data_dims(X::AbstractMatrix, y::AbstractVector, dims::Integer)
-    n, p = check_dims(X, dims)
-    l = length(y)
+function check_data_dims(X::AbstractMatrix, y::AbstractVector; dims::Integer)
+    n, p = check_dims(X, dims=dims)
+    n₂ = length(y)
 
-    if n != l
+    if n != n₂
         rc = dims == 1 ? "rows" : "columns"
         msg = "the number of $(rc) in data matrix X must match the length of class index " *
-              "vector y (got $(n) and $(l))"
+              "vector y (got $(n) and $(n₂))"
 
         throw(DimensionMismatch(msg))
     end
@@ -56,11 +56,11 @@ function check_data_dims(X::AbstractMatrix, y::AbstractVector, dims::Integer)
     return n, p
 end
 
-function check_priors(π::Vector{T}) where T
+function check_priors(π::AbstractVector{T}) where T
     total = sum(π)
 
     if !isapprox(total, one(T))
-        throw(ArgumentError("class priors π must sum to 1 (got $(total))"))
+        throw(ArgumentError("class priors vector π must sum to 1 (got $(total))"))
     end
 
     if any(π .≤ 0)
@@ -73,85 +73,83 @@ end
 
 ### Class Calculations
 
-function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, y::Vector{<:Int}) where T
-    n, p, k = check_centroid_dims(M, X, 1)
-    check_data_dims(X, y, 1)
+function class_counts(y::Vector{<:Integer}; m::Integer=maximum(y))
+    nₘ = zeros(Int, m)
+
+    for i = 1:length(y)
+        yᵢ = y[i]
+        1 ≤ yᵢ ≤ m || throw(BoundsError(nₘ, yᵢ))
+        nₘ[yᵢ] += 1
+    end
+
+    return nₘ
+end
+
+function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, 
+                      y::Vector{<:Integer}) where T
+    n, p, m = check_centroid_dims(M, X, dims=1)
+    check_data_dims(X, y, dims=1)
            
     M .= zero(T)
-    nₖ = zeros(Int, k)  # track counts to ensure an observation for each class
+    nₘ = zeros(Int, m)  # track counts to ensure an observation for each class
     for i = 1:n
-        kᵢ = y[i]
-        1 ≤ kᵢ ≤ k || throw(BoundsError(M, (kᵢ, 1)))
-        nₖ[kᵢ] += 1
+        yᵢ = y[i]
+        1 ≤ yᵢ ≤ m || throw(BoundsError(M, (yᵢ, 1)))
+        nₘ[yᵢ] += 1
         @inbounds for j = 1:p
-            M[kᵢ, j] += X[i, j]
+            M[yᵢ, j] += X[i, j]
         end
     end
 
-    all(nₖ .≥ 1) || error("must have at least one observation per class")
-    broadcast!(/, M, M, nₖ)
+    all(nₘ .≥ 1) || error("must have at least one observation per class")
+    broadcast!(/, M, M, nₘ)
 
     return M
 end
 
-function class_means(X::AbstractMatrix{T}, y::Vector{<:Integer}, dims::Integer=1, 
-                     k::Integer=maximum(y)) where T
+function class_means(X::AbstractMatrix{T}, y::Vector{<:Integer}; dims::Integer=1, 
+                     m::Integer=maximum(y)) where T
     if dims == 1
-        return class_means!(zeros(T, k, size(X, 2)), X, y)
+        return class_means!(zeros(T, m, size(X, 2)), X, y)
     else
-        n, p = check_data_dims(X, y, dims)
+        n, p = check_data_dims(X, y, dims=dims)
 
-        M = zeros(T, p, k)
+        M = zeros(T, p, m)
         class_means!(transpose(M), transpose(X), y)
 
         return M
     end
 end
 
-function class_counts(y::Vector{<:Integer}, k::Integer=maximum(y))
-    nₖ = zeros(Int, k)
 
-    for i = 1:length(y)
-        kᵢ = y[i]
-        1 ≤ kᵢ ≤ k || throw(BoundsError(nₖ, kᵢ))
-        nₖ[kᵢ] += 1
-    end
-
-    return nₖ
-end
-
-
-"""
-_center_classes!(X, y, M)
-"""
-function center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix)
-    n, p, k = check_centroid_dims(M, X, 1)
-    check_data_dims(X, y, 1)
+function _center_classes!(X::AbstractMatrix{T}, y::Vector{<:Integer}, 
+                          M::AbstractMatrix{T}) where T
+    n, p, m = check_centroid_dims(M, X, dims=1)
+    check_data_dims(X, y, dims=1)
     
     for i = 1:n
-        kᵢ = y[i]
-        1 ≤ kᵢ ≤ k || throw(BoundsError(M, (kᵢ, 1)))
+        yᵢ = y[i]
+        1 ≤ yᵢ ≤ m || throw(BoundsError(M, (yᵢ, 1)))
         @inbounds for j = 1:p
-            X[i, j] -= M[kᵢ, j]
+            X[i, j] -= M[yᵢ, j]
         end
     end
 
     return X
 end
 
-
 """
-_center_classes!(X, y, M, dims)
+_center_classes!(X, y, M)
 """
-function center_classes!(X::AbstractMatrix, y::Vector{<:Int}, M::AbstractMatrix, 
+function center_classes!(X::AbstractMatrix, y::Vector{<:Integer}, M::AbstractMatrix; 
                          dims::Integer)
     if dims == 1
-        return center_classes!(X, y, M)
+        return _center_classes!(X, y, M)
     else
-        n, p, k = check_centroid_dims(M, X, dims)
-        check_data_dims(X, y, 2)
+        check_centroid_dims(M, X, dims=dims)
+        check_data_dims(X, y, dims=2)
 
-        center_classes!(transpose(X), y, transpose(M))
+        _center_classes!(transpose(X), y, transpose(M))
 
         return X
     end
@@ -203,8 +201,10 @@ whiten_data!(X::Matrix{T})
 
 Generate whitening transform matrix for centered data matrix X
 """
-function whiten_data!(X::Matrix{T}, dims::Integer) where T
-    n, p = check_dims(X, dims)
+function whiten_data!(X::Matrix{T}; dims::Integer, df::Integer=size(X,dims)-1) where T
+    df > 0 || error("degrees of freedom must be greater than 0")
+
+    n, p = check_dims(X, dims=dims)
 
     n > p || error("insufficient number of within-class observations to produce a full " *
                    "rank covariance matrix ($(n) observations, $(p) predictors)")
@@ -217,6 +217,10 @@ function whiten_data!(X::Matrix{T}, dims::Integer) where T
         R = UpperTriangular(transpose(lq!(X).L))  
     end
 
+    broadcast!(/, R, R, √(df))
+
+    detΣ = det(R)^2
+
     W = try
         inv(R)
     catch err
@@ -227,20 +231,18 @@ function whiten_data!(X::Matrix{T}, dims::Integer) where T
         end
         throw(err)
     end
-    
-    broadcast!(*, W, W, √(n-1))
 
     if dims == 1
-        return W
+        return (W, detΣ)
     else
-        return transpose(W)
+        return (transpose(W), detΣ)
     end
 end
 
 
-function whiten_data!(X::Matrix{T}, γ::T, dims::Integer; atol::T = zero(T),
+function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, atol::T = zero(T),
                       rtol::T = (eps(one(T))*min(size(X)...))*iszero(atol)) where T
-    n, p = check_dims(X, dims)
+    n, p = check_dims(X, dims=dims)
     
     n > p || error("insufficient number of within-class observations to produce a full " *
                    "rank covariance matrix ($(n) observations, $(p) predictors)")
