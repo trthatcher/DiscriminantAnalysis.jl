@@ -432,13 +432,13 @@ end
         X_test = copy(X)
         W, detΣ = DA.whiten_data!(X_test, dims=1)
         @test isapprox(cov(X*W, dims=1), diagm(0 => ones(T, p)))
-        @test isapprox(det(cov(X)), detΣ)
+        @test isapprox(det(cov(X, dims=1)), detΣ)
 
         ### cols
         Xt_test = copy(Xt)
         W, detΣ = DA.whiten_data!(Xt_test, dims=2)
         @test isapprox(cov(W*Xt, dims=2), diagm(0 => ones(T, p)))
-        @test isapprox(det(cov(X)), detΣ)
+        @test isapprox(det(cov(Xt, dims=2)), detΣ)
     end
 end
 
@@ -466,12 +466,14 @@ end
 
         ### rows
         X_test = copy(X)
-        W = DA.whiten_data!(X_test, T(0), dims=1)
+        W, detΣ = DA.whiten_data!(X_test, T(0), dims=1)
         @test isapprox(cov(X*W, dims=1), diagm(0 => ones(T, p)))
+        @test isapprox(det(cov(X, dims=1)), detΣ)
 
         ### cols
         Xt_test = copy(Xt)
-        W = DA.whiten_data!(Xt_test, T(0), dims=2)
+        W, detΣ = DA.whiten_data!(Xt_test, T(0), dims=2)
         @test isapprox(cov(W*Xt, dims=2), diagm(0 => ones(T, p)))
+        @test isapprox(det(cov(Xt, dims=2)), detΣ)
     end
 end

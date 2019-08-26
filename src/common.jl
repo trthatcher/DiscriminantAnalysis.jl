@@ -195,7 +195,7 @@ end
 """
     regularize!(Σ, γ)
 
-Shrink `Σ` matrix towards the average eigenvalue multiplied by the identity matrix
+Shrink `Σ` matrix towards the average eigenvalue multiplied by the identity matrix.
 """
 function regularize!(Σ::AbstractMatrix{T}, γ::T) where {T}
     (p = size(Σ, 1)) == size(Σ, 2) || throw(DimensionMismatch("Σ must be square"))
@@ -214,9 +214,11 @@ end
 
 
 """
-whiten_data!(X::Matrix{T})
+    whiten_data!(X; dims, df)
 
-Generate whitening transform matrix for centered data matrix X
+Compute a whitening transform matrix for centered data matrix `X`. Use `dims=1` for 
+row-based observations and `dims=2` for column-based observations. The `df` parameter 
+specifies the effective degrees of freedom.
 """
 function whiten_data!(X::Matrix{T}; dims::Integer, df::Integer=size(X,dims)-1) where T
     df > 0 || error("degrees of freedom must be greater than 0")
@@ -257,8 +259,7 @@ function whiten_data!(X::Matrix{T}; dims::Integer, df::Integer=size(X,dims)-1) w
 end
 
 
-function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, atol::T = zero(T),
-                      rtol::T = (eps(one(T))*min(size(X)...))*iszero(atol)) where T
+function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, df::Integer=size(X,dims)-1) where T
     n, p = check_dims(X, dims=dims)
     
     n > p || error("insufficient number of within-class observations to produce a full " *
@@ -266,11 +267,14 @@ function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, atol::T = zero(T),
     
     0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ must be in the interval [0,1]"))
 
+    tol = eps(one(T))*p*maximum(X)
 
-    UDVᵀ = svd!(X, full=false)  # Vᵀ from thin SVD will be n×n since m > n
+    UDVᵀ = svd!(X, full=false)
 
     D = UDVᵀ.S
-    broadcast!(σᵢ -> (σᵢ^2)/(n-1), D, D)  # Convert data singular values to cov eigenvalues
+    broadcast!(σᵢ -> (σᵢ^2)/df, D, D)  # Convert data singular values to Σ eigenvalues
+
+    detΣ = prod(D)
 
     # Regularize: Σ = VD²Vᵀ ⟹ Σ(γ) = V((1-γ)D² + (γ/p)trace(D²)I)Vᵀ
     if γ ≠ 0
@@ -280,7 +284,6 @@ function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, atol::T = zero(T),
         broadcast!(√, D, D)
     end
 
-    tol = max(rtol*maximum(D), atol)
     all(D .> tol) || error("rank deficiency (collinearity) detected with tolerance $(tol)")
 
     # Whitening matrix
@@ -292,7 +295,7 @@ function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, atol::T = zero(T),
         Wᵀ = broadcast!(/, U, U, transpose(D))
     end
 
-    return transpose(Wᵀ)
+    return (transpose(Wᵀ), detΣ)
 end
 
 
