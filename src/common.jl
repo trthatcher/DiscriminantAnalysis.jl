@@ -85,12 +85,17 @@ function class_counts(y::Vector{<:Integer}; m::Integer=maximum(y))
     return nₘ
 end
 
-function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T}, 
-                      y::Vector{<:Integer}) where T
+
+"""
+    _class_centroids!(M, X, y)
+
+Backend for `class_centroids!` - assumes `dims=1`.
+"""
+function _class_centroids!(M::AbstractMatrix, X::AbstractMatrix, y::Vector{<:Integer})
     n, p, m = check_centroid_dims(M, X, dims=1)
     check_data_dims(X, y, dims=1)
            
-    M .= zero(T)
+    M .= zero(eltype(M))
     nₘ = zeros(Int, m)  # track counts to ensure an observation for each class
     for i = 1:n
         yᵢ = y[i]
@@ -107,23 +112,31 @@ function class_means!(M::AbstractMatrix{T}, X::AbstractMatrix{T},
     return M
 end
 
-function class_means(X::AbstractMatrix{T}, y::Vector{<:Integer}; dims::Integer=1, 
-                     m::Integer=maximum(y)) where T
+
+"""
+    class_centroids!(M, X, y; dims=1)
+
+Overwrites matrix `M` with class centroids from `X` based on class indexes from `y`. Use
+`dims=1` for row-based observations and `dims=2` for column-based observations.
+"""
+function class_centroids!(M::AbstractMatrix, X::AbstractMatrix, y::Vector; dims::Integer=1)
     if dims == 1
-        return class_means!(zeros(T, m, size(X, 2)), X, y)
+        return _class_centroids!(M, X, y)
     else
-        n, p = check_data_dims(X, y, dims=dims)
-
-        M = zeros(T, p, m)
-        class_means!(transpose(M), transpose(X), y)
-
+        check_centroid_dims(M, X, dims=dims)
+        check_data_dims(X, y, dims=2)
+        _class_centroids!(transpose(M), transpose(X), y)
         return M
     end
 end
 
 
-function _center_classes!(X::AbstractMatrix{T}, y::Vector{<:Integer}, 
-                          M::AbstractMatrix{T}) where T
+"""
+    _center_classes!(X, M, y)
+
+Backend for `center_classes!` - assumes `dims=1`.
+"""
+function _center_classes!(X::AbstractMatrix, M::AbstractMatrix, y::Vector{<:Integer})
     n, p, m = check_centroid_dims(M, X, dims=1)
     check_data_dims(X, y, dims=1)
     
@@ -138,18 +151,22 @@ function _center_classes!(X::AbstractMatrix{T}, y::Vector{<:Integer},
     return X
 end
 
+
 """
-_center_classes!(X, y, M)
+    center_classes!(X, M, y)
+
+Overwrites `X` with centered version using centroids from `M` based on class labels `y`. 
+Use `dims=1` for row-based observations and `dims=2` for column-based observations. 
 """
-function center_classes!(X::AbstractMatrix, y::Vector{<:Integer}, M::AbstractMatrix; 
-                         dims::Integer)
+function center_classes!(X::AbstractMatrix, M::AbstractMatrix, y::Vector{<:Integer}; 
+                         dims::Integer=1)
     if dims == 1
-        return _center_classes!(X, y, M)
+        return _center_classes!(X, M, y)
     else
         check_centroid_dims(M, X, dims=dims)
         check_data_dims(X, y, dims=2)
 
-        _center_classes!(transpose(X), y, transpose(M))
+        _center_classes!(transpose(X), transpose(M), y)
 
         return X
     end
