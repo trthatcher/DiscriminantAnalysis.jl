@@ -43,33 +43,41 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
             A = nothing
         end
 
-        new{T}(false, dims, W, zero(T), M, π, C, A, gamma)
+        new{T}(false, dims, W, zero(T), copy(M), copy(π), C, A, gamma)
     end
 end
 
 function canonical_coordinates!(LDA::LinearDiscriminantModel)
     M = copy(LDA.M)
-    k, p = check_dims(M, LDA.dims)
+    m, p = check_dims(M, dims=LDA.dims)
 
     π = LDA.π
+    W = LDA.W
 
-    if p ≤ k-1
+    if p ≤ m-1
         # no dimensionality reduction is possible
         C = I
     elseif LDA.dims == 1
+        # Need to center M by overall mean
         # Σ = Mᵀdiag(π)M so need to scale by sqrt π
+        M .-= transpose(π)*M
         broadcast!((a,b) -> a*√(b), M, M, π)
         UDVᵀ = svd!(M*W, full=false)
-        C = transpose(view(UDVᵀ.Vt, 1:k-1, :))
+        C = transpose(view(UDVᵀ.Vt, 1:m-1, :))
     else
+        M .-= M*π
         broadcast!((a,b) -> a*√(b), M, M, transpose(π))
         UDVᵀ = svd!(W*M, full=false)
-        C = transpose(view(UDVᵀ.U, :, 1:k-1))
+        C = transpose(view(UDVᵀ.U, :, 1:m-1))
     end
 
+    size(LDA.C) == size(C) || throw(DimensionMismatch("LDA.C does not match computed C"))
     copyto!(LDA.C, C)
 
-    if LDA.dims == 1
+    if p ≤ m-1
+        size(LDA.A) == (p, p)
+        copyto!(LDA.A, W)
+    elseif LDA.dims == 1
         mul!(LDA.A, LDA.W, LDA.C)
     else
         mul!(LDA.A, LDA.C, LDA.W)

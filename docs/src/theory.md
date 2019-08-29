@@ -152,6 +152,8 @@ $$
 \mathbf{W} \Sigma_b \mathbf{V} = \mathbf{W}^{-\intercal} \mathbf{V} \Lambda
 $$
 
+Let $\mathbf{A} = \mathbf{W}^{-\intercal}\mathbf{V}$
+
 $$
 \mathbf{W} \Sigma_b \mathbf{W}^{\intercal} (\mathbf{W}^{-\intercal} \mathbf{V}) 
 = (\mathbf{W}^{-\intercal} \mathbf{V}) \Lambda
