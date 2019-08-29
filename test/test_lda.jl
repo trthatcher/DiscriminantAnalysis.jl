@@ -1,7 +1,7 @@
 @testset "LinearDiscriminantModel" begin
-    n = 10
+    n = 20
     p = 5
-    m = 3
+    m = 5
     for T in (Float32, Float64)
         LDM = DA.LinearDiscriminantModel{T}
 
@@ -28,37 +28,58 @@
         @test_throws ArgumentError LDM(zeros(T, 3, 1), T[0.4; 0.4; 0.4], dims=1)
 
         @test_throws DomainError LDM(zeros(T, 3, 1), T[1.0; 0.5; -0.5], dims=1)
-        @test_throws DomainError LDM(zeros(T, 3, 1), T[1.0; 0.5; -0.5], dims=1)
-
-        @test_throws DomainError LDM(zeros(T, 3, 1), T[0.5; 0.5; 0.0], dims=1)
         @test_throws DomainError LDM(zeros(T, 3, 1), T[0.5; 0.5; 0.0], dims=1)
 
-        # Test 1
-        lda_test = LDM(ones(T, m, p), ones(T, m)/m, dims=1, canonical=false)
+        # Test 1: non-canonical
+        for dims in (1, 2)
+            M = dims == 1 ? ones(T, m, p) : ones(T, p, m)
+            lda_test = LDM(M, ones(T, m)/m, dims=dims, canonical=false)
 
-        @test lda_test.fit == false
-        @test lda_test.dims == 1
-        @test lda_test.W == zeros(T, p, p)
-        @test lda_test.detΣ == zero(T)
-        @test lda_test.M == ones(T, m, p)
-        @test lda_test.π == ones(T, m)/m
-        @test lda_test.C === nothing
-        @test lda_test.A === nothing
-        @test lda_test.γ === nothing
+            @test lda_test.fit == false
+            @test lda_test.dims == dims
+            @test lda_test.W == zeros(T, p, p)
+            @test lda_test.detΣ == zero(T)
+            @test lda_test.M == M
+            @test lda_test.π == ones(T, m)/m
+            @test lda_test.C === nothing
+            @test lda_test.A === nothing
+            @test lda_test.γ === nothing
+        end
 
-        # Test 2
-        lda_test = LDM(ones(T, p, m), ones(T, m)/m, dims=2, canonical=true, gamma=T(0.5))
-        d = min(p, m-1)
+        # Test 2: canonical with p > m-1
+        for dims in (1, 2)
+            M = dims == 1 ? ones(T, m, p) : ones(T, p, m)
+            lda_test = LDM(M, ones(T, m)/m, dims=dims, canonical=true, gamma=T(0.5))
 
-        @test lda_test.fit == false
-        @test lda_test.dims == 2
-        @test lda_test.W == zeros(T, p, p)
-        @test lda_test.detΣ == zero(T)
-        @test lda_test.M == ones(T, p, m)
-        @test lda_test.π == ones(T, m)/m
-        @test lda_test.C == zeros(T, d, p)
-        @test lda_test.A == zeros(T, d, p)
-        @test lda_test.γ == T(0.5)
+            d = min(p, m-1)
+            A_C = dims == 1 ? zeros(T, p, d) : zeros(T, d, p)
+
+            @test lda_test.fit == false
+            @test lda_test.dims == dims
+            @test lda_test.W == zeros(T, p, p)
+            @test lda_test.detΣ == zero(T)
+            @test lda_test.M == M
+            @test lda_test.π == ones(T, m)/m
+            @test lda_test.C == A_C
+            @test lda_test.A == A_C
+            @test lda_test.γ == T(0.5)
+        end
+
+        # Test 3: canonical with p <= m-1
+        for dims in (1, 2)
+            M = dims == 1 ? ones(T, m, m-1) : ones(T, m-1, m)
+            lda_test = LDM(M, ones(T, m)/m, dims=dims, canonical=true, gamma=T(0.5))
+
+            @test lda_test.fit == false
+            @test lda_test.dims == dims
+            @test lda_test.W == zeros(T, m-1, m-1)
+            @test lda_test.detΣ == zero(T)
+            @test lda_test.M == M
+            @test lda_test.π == ones(T, m)/m
+            @test lda_test.C == zeros(T, m-1, m-1)
+            @test lda_test.A == zeros(T, m-1, m-1)
+            @test lda_test.γ == T(0.5)
+        end
     end
 end
 

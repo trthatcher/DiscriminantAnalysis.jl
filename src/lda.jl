@@ -86,31 +86,6 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel)
     return LDA
 end
 
-#function canonical_coordinates(M::AbstractMatrix{T}, W::AbstractMatrix{T}, π::Vector{T},
-#                               dims::Integer) where T
-#    dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $(dims))")
-#    k = size(M, dims)
-#    p = size(M, dims == 1 ? 2 : 1)
-#
-#    length(π) == k || dim_error("")
-#
-#    all(size(W) .== p) || dim_error("W must match dimensions of M")
-#
-#    d = min(k-1, p)
-#
-#    if dims == 1
-#        MW = (sqrt.(π) .* M)*W
-#        UDVᵀ = svd!(MW, full=false)
-#        Cᵀ = view(UDVᵀ.Vt, 1:d, :)
-#    else
-#        WM = W*(transpose(sqrt.(π)) .* M)
-#        UDVᵀ = svd!(WM, full=false)
-#        Cᵀ = view(UDVᵀ.U, :, 1:d)
-#    end
-#
-#    return transpose(Cᵀ)
-#end
-
 
 """
     fit!(LDA::LinearDiscriminantModel, y::Vector, X::Matrix)
