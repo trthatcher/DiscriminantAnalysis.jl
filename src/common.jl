@@ -85,6 +85,18 @@ function class_counts(y::Vector{<:Integer}; m::Integer=maximum(y))
     return nₘ
 end
 
+function class_counts!(nₘ::Vector{<:Integer}, y::Vector{<:Integer})
+    m = length(nₘ)
+
+    for i = 1:length(y)
+        yᵢ = y[i]
+        1 ≤ yᵢ ≤ m || throw(BoundsError(nₘ, yᵢ))
+        nₘ[yᵢ] += 1
+    end
+
+    return nₘ
+end
+
 
 """
     _class_centroids!(M, X, y)
@@ -254,7 +266,7 @@ function whiten_data!(X::Matrix{T}; dims::Integer, df::Integer=size(X,dims)-1) w
     if dims == 1
         return (W, detΣ)
     else
-        return (transpose(W), detΣ)
+        return (copy(transpose(W)), detΣ)
     end
 end
 
@@ -295,7 +307,7 @@ function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, df::Integer=size(X,dim
         Wᵀ = broadcast!(/, U, U, transpose(D))
     end
 
-    return (transpose(Wᵀ), detΣ)
+    return (copy(transpose(Wᵀ)), detΣ)
 end
 
 
