@@ -101,17 +101,18 @@ function _fit!(LDA::LinearDiscriminantModel{T},
     end
 
     # Overall centroid is prior-weighted average of class centroids
-    LDA.μ = LDA.dims == 1 ? transpose(LDA.π)*M : M*LDA.π
+    LDA.μ = LDA.dims == 1 ? vec(transpose(LDA.π)*LDA.M) : LDA.M*LDA.π
 
-    center_classes!(X, y, LDA.M, dims=dims)
+    center_classes!(X, LDA.M, y, dims=dims)
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if LDA.γ === nothing
-        LDA.W, LDA.detΣ = whiten_data!(X, dims=dims)
+        LDA.W, LDA.detΣ = whiten_data!(X, dims=dims, df=n-m)
     else
-        LDA.W, LDA.detΣ = whiten_data!(X, LDA.γ, dims=dims)
+        LDA.W, LDA.detΣ = whiten_data!(X, LDA.γ, dims=dims, df=n-m)
     end
 
+    # Perform canonical discriminant analysis if applicable
     if canonical
         canonical_coordinates!(LDA)
     else

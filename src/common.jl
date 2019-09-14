@@ -270,6 +270,7 @@ function whiten_data!(X::Matrix{T}; dims::Integer, df::Integer=size(X,dims)-1) w
     end
 end
 
+@inline regularize(x, y, γ) = (1-γ)*x + γ*y
 
 function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, df::Integer=size(X,dims)-1) where T
     n, p = check_dims(X, dims=dims)
@@ -284,16 +285,16 @@ function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, df::Integer=size(X,dim
     UDVᵀ = svd!(X, full=false)
 
     D = UDVᵀ.S
-    broadcast!(σᵢ -> (σᵢ^2)/df, D, D)  # Convert data singular values to Σ eigenvalues
 
-    detΣ = prod(D)
-
-    # Regularize: Σ = VD²Vᵀ ⟹ Σ(γ) = V((1-γ)D² + (γ/p)trace(D²)I)Vᵀ
-    if γ ≠ 0
-        λ_bar = mean(D)
-        broadcast!(λᵢ -> √((1-γ)*λᵢ + γ*λ_bar), D, D)
-    else
+    if γ ≠ zero(T)
+        # Regularize: Σ = VD²Vᵀ ⟹ Σ(γ) = V((1-γ)D² + (γ/p)trace(D²)I)Vᵀ
+        broadcast!(σᵢ -> abs2(σᵢ)/df, D, D)  # Convert data singular values to Σ eigenvalues
+        broadcast!(regularize, D, D, mean(D), γ)
+        detΣ = prod(D)
         broadcast!(√, D, D)
+    else
+        detΣ = prod(σᵢ -> abs2(σᵢ)/df, D)
+        broadcast!(/, D, D, √(df))
     end
 
     all(D .> tol) || error("rank deficiency (collinearity) detected with tolerance $(tol)")
