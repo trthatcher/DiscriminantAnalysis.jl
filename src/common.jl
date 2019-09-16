@@ -127,62 +127,14 @@ function class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::Abstra
     if dims == 1
         check_centroid_dims(M, X, dims=1)
         check_data_dims(X, y, dims=1)
-        _class_centroids!(transpose(M), nₘ, transpose(X), y)
+        _class_statistics!(transpose(M), nₘ, transpose(X), y)
         return (M, nₘ)
     elseif dims ==2
-        return _class_centroids!(M, nₘ, X, y)
+        return _class_statistics!(M, nₘ, X, y)
     else
         throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
     end
 end
-
-
-
-
-"""
-    _class_centroids!(M, X, y)
-
-Backend for `class_centroids!` - assumes `dims=1`.
-"""
-function _class_centroids!(M::AbstractMatrix, X::AbstractMatrix, y::Vector{<:Integer})
-    n, p, m = check_centroid_dims(M, X, dims=1)
-    check_data_dims(X, y, dims=1)
-           
-    M .= zero(eltype(M))
-    nₘ = zeros(Int, m)  # track counts to ensure an observation for each class
-    for i = 1:n
-        yᵢ = y[i]
-        1 ≤ yᵢ ≤ m || throw(BoundsError(M, (yᵢ, 1)))
-        nₘ[yᵢ] += 1
-        @inbounds for j = 1:p
-            M[yᵢ, j] += X[i, j]
-        end
-    end
-
-    all(nₘ .≥ 1) || error("must have at least one observation per class")
-    broadcast!(/, M, M, nₘ)
-
-    return M
-end
-
-
-"""
-    class_centroids!(M, X, y; dims=1)
-
-Overwrites matrix `M` with class centroids from `X` based on class indexes from `y`. Use
-`dims=1` for row-based observations and `dims=2` for column-based observations.
-"""
-function class_centroids!(M::AbstractMatrix, X::AbstractMatrix, y::Vector; dims::Integer=1)
-    if dims == 1
-        return _class_centroids!(M, X, y)
-    else
-        check_centroid_dims(M, X, dims=dims)
-        check_data_dims(X, y, dims=2)
-        _class_centroids!(transpose(M), transpose(X), y)
-        return M
-    end
-end
-
 
 """
     regularize!(Σ₁, Σ₂, λ)

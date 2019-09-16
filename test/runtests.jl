@@ -29,33 +29,6 @@ function random_data(T::Type{<:AbstractFloat}, nₘ::Vector{Int}, p::Int)
     return (X, y, M)
 end
 
-
-#function random_data(T::Type{<:AbstractFloat}, N::Vector{Int}, p::Int)
-#    n = sum(N)
-#    c = length(N)
-#
-#    X = zeros(T, n, p)
-#    M = zeros(T, c, p)
-#
-#    ix = sortperm(rand(n))
-#
-#    y = [k for (k, nₖ) in enumerate(N) for i = 1:nₖ][ix]
-#
-#    for (k, nₖ) in enumerate(N)
-#        Xₖ = randn(T, nₖ, p)
-#        Xₖ .-= mean(Xₖ, dims=1)
-#
-#        μ = transpose(T[rand() < 0.5 ? -2k : 2k for i = 1:p])
-#
-#        Xₖ .+= μ
-#
-#        X[y .== k, :] = Xₖ
-#        M[k, :] = μ
-#    end
-#
-#    return (X, y, M)
-#end
-
 function random_cov(T::Type{<:AbstractFloat}, p::Integer)
     Q = qr(randn(T, p, p)).Q
     D = Diagonal(2p*rand(T, p))

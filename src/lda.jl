@@ -78,8 +78,18 @@ function _fit!(LDA::LinearDiscriminantModel{T},
     end
     LDA.γ = gamma
 
-    # Compute class counts for hypothesis tests
-    LDA.nₘ = class_counts!(zeros(Int, m), y)
+    # Compute centroids and class counts from data if not specified
+    if centroids === nothing
+        LDA.M = is_row ? Matrix{T}(undef, m, p) : Matrix{T}(undef, p, m)
+        LDA.nₘ = Vector{Int}(undef, m)
+        class_statistics!(LDA.M, LDA.nₘ, X, y, dims=dims)
+    else
+        check_centroid_dims(centroids, X, dims=dims)
+        size(centroids, dims) == m || throw(DimensionMismatch("bad class count in M"))
+        LDA.M = copyto!(similar(centroids, T), centroids)
+        LDA.nₘ = class_counts!(Vector{Int}(undef, m), y)
+    end
+
     all(LDA.nₘ .≥ 2) || error("must have at least two observations per class")
 
     # Compute priors from class frequencies in data if not specified
@@ -87,19 +97,8 @@ function _fit!(LDA::LinearDiscriminantModel{T},
         LDA.π = broadcast!(/, Vector{T}(undef, m), LDA.nₘ, n)
     else
         validate_priors(priors)
+        length(priors) == m || throw(DimensionMismatch("bad length"))
         LDA.π = copyto!(similar(priors, T), priors)
-    end
-
-    # Compute centroids from data if not specified
-    if centroids === nothing
-        LDA.M = is_row ? zeros(T, m, p) : zeros(T, p, m)
-        class_centroids!(LDA.M, X, y, dims=dims)
-    else
-        check_centroid_dims(centroids, X, dims=dims)
-        LDA.M = copyto!(similar(centroids, T), centroids)
-    end
-    if size(LDA.M, dims) != m
-        error("here error")
     end
 
     # Overall centroid is prior-weighted average of class centroids
@@ -107,7 +106,6 @@ function _fit!(LDA::LinearDiscriminantModel{T},
 
     # Center the data matrix with respect to classes to compute whitening matrix
     X .-= is_row ? view(LDA.M, y, :) : view(LDA.M, :, y)
-    #center_classes!(X, LDA.M, y, dims=dims)
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if LDA.γ === nothing
