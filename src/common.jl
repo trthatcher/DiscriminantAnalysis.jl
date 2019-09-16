@@ -41,6 +41,7 @@ function check_centroid_dims(M::AbstractMatrix, X::AbstractMatrix; dims::Integer
     return (n, p, m)
 end
 
+
 ### Data/Parameter Validation
 
 function validate_priors(π::AbstractVector{T}) where T
@@ -64,6 +65,11 @@ end
 
 ### Class Calculations
 
+"""
+    class_counts!(nₘ, y)
+
+Overwrite vector `nₘ` with counts of each index in `y`
+"""
 function class_counts!(nₘ::Vector{T}, y::Vector{<:Integer}) where {T<:Integer}
     m = length(nₘ)
 
@@ -77,6 +83,60 @@ function class_counts!(nₘ::Vector{T}, y::Vector{<:Integer}) where {T<:Integer}
 
     return nₘ
 end
+
+"""
+    _class_statistics!(M, nₘ, X, y)
+
+Backend for `class_statistics!` - assumes `dims=2`.
+"""
+function _class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::AbstractMatrix, 
+                            y::Vector{<:Integer})
+    n, p, m = check_centroid_dims(M, X, dims=2)
+    check_data_dims(X, y, dims=2)
+
+    length(nₘ) == m || throw(DimensionMismatch("length of nₘ must match M"))
+
+    T = eltype(nₘ)
+
+    M .= zero(eltype(M))
+    nₘ .= zero(T)  # track counts to ensure an observation for each class
+
+    for i = 1:n
+        yᵢ = y[i]
+        1 ≤ yᵢ ≤ m || throw(BoundsError(M, (1, yᵢ)))
+        nₘ[yᵢ] += one(T)
+        @inbounds for j = 1:p
+            M[j, yᵢ] += X[j, i]
+        end
+    end
+
+    all(nₘ .≥ 1) || error("must have at least one observation per class")
+    broadcast!(/, M, M, transpose(nₘ))
+
+    return (M, nₘ)
+end
+
+"""
+    class_statistics!(M, nₘ, X, y; dims=1)
+
+Overwrites matrix `M` with class centroids from `X` based on class indexes from `y`. Use
+`dims=1` for row-based observations and `dims=2` for column-based observations.
+"""
+function class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::AbstractMatrix, 
+                           y::Vector{<:Integer}; dims::Integer=1)
+    if dims == 1
+        check_centroid_dims(M, X, dims=1)
+        check_data_dims(X, y, dims=1)
+        _class_centroids!(transpose(M), nₘ, transpose(X), y)
+        return (M, nₘ)
+    elseif dims ==2
+        return _class_centroids!(M, nₘ, X, y)
+    else
+        throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
+    end
+end
+
+
 
 
 """

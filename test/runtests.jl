@@ -3,31 +3,58 @@ using Test, LinearAlgebra, Statistics, DiscriminantAnalysis
 const DA = DiscriminantAnalysis
 
 
-function random_data(T::Type{<:AbstractFloat}, N::Vector{Int}, p::Int)
-    n = sum(N)
-    c = length(N)
+function random_data(T::Type{<:AbstractFloat}, nₘ::Vector{Int}, p::Int)
+    n = sum(nₘ)
+    m = length(nₘ)
 
-    X = zeros(T, n, p)
-    M = zeros(T, c, p)
+    X = zeros(T, p, n)
+    M = zeros(T, p, m)
 
     ix = sortperm(rand(n))
 
-    y = [k for (k, nₖ) in enumerate(N) for i = 1:nₖ][ix]
+    y = [k for (k, nₖ) in enumerate(nₘ) for i = 1:nₖ][ix]
 
-    for (k, nₖ) in enumerate(N)
-        Xₖ = randn(T, nₖ, p)
-        Xₖ .-= mean(Xₖ, dims=1)
+    for (k, nₖ) in enumerate(nₘ)
+        Xₖ = randn(T, p, nₖ)
+        Xₖ .-= mean(Xₖ, dims=2)
 
-        μ = transpose(T[rand() < 0.5 ? -2k : 2k for i = 1:p])
+        μ = T[rand() < 0.5 ? -2k : 2k for i = 1:p]
 
         Xₖ .+= μ
 
-        X[y .== k, :] = Xₖ
-        M[k, :] = μ
+        X[:, y .== k] = Xₖ
+        M[:, k] = μ
     end
 
     return (X, y, M)
 end
+
+
+#function random_data(T::Type{<:AbstractFloat}, N::Vector{Int}, p::Int)
+#    n = sum(N)
+#    c = length(N)
+#
+#    X = zeros(T, n, p)
+#    M = zeros(T, c, p)
+#
+#    ix = sortperm(rand(n))
+#
+#    y = [k for (k, nₖ) in enumerate(N) for i = 1:nₖ][ix]
+#
+#    for (k, nₖ) in enumerate(N)
+#        Xₖ = randn(T, nₖ, p)
+#        Xₖ .-= mean(Xₖ, dims=1)
+#
+#        μ = transpose(T[rand() < 0.5 ? -2k : 2k for i = 1:p])
+#
+#        Xₖ .+= μ
+#
+#        X[y .== k, :] = Xₖ
+#        M[k, :] = μ
+#    end
+#
+#    return (X, y, M)
+#end
 
 function random_cov(T::Type{<:AbstractFloat}, p::Integer)
     Q = qr(randn(T, p, p)).Q

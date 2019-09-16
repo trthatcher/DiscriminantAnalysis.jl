@@ -137,40 +137,40 @@
     end
 end
 
-@testset "_fit!(LDA)" begin
-    nₘ = [40; 50; 60]
-    p = 5
-    n = sum(nₘ)
-    m = length(nₘ)
-
-    for T in (Float32, Float64)
-        X, y, M = random_data(T, nₘ, p)
-        π = convert(Vector{T}, nₘ/m)
-        scale = range(convert(T, 0.95), step=convert(T, 0.001), stop=convert(T, 1.1))
-
-        M_test_list = [nothing, rand(scale, m, p) .* M]
-        π_test_list = [nothing, ones(T,m)/m]
-        γ_test_list = [nothing, zero(T), convert(T, 0.5), one(T)]
-
-        LDM = DA.LinearDiscriminantModel{T}
-
-        for M_test in M_test_list, π_test in π_test_list, γ_test in γ_test_list
-            Xc = X .- (M_test === nothing ? M[y, :] : M_test[y, :])
-            Σ = (transpose(Xc)*Xc) ./ (n-m)
-
-            if !(γ_test === nothing)
-                Σ = (1-γ_test)*Σ + γ_test*(tr(Σ)/p)*I
-            end
-
-            lda_test = DA._fit!(LDM(), y, copy(X), 1, false, M_test, π_test, γ_test)
-
-            @test lda_test.fit == true
-            @test lda_test.dims == 1
-            @test isapprox(lda_test.M, M_test === nothing ? M : M_test)
-            @test isapprox(lda_test.detΣ, det(Σ))
-        end
-    end
-end
+#@testset "_fit!(LDA)" begin
+#    nₘ = [40; 50; 60]
+#    p = 5
+#    n = sum(nₘ)
+#    m = length(nₘ)
+#
+#    for T in (Float32, Float64)
+#        X, y, M = random_data(T, nₘ, p)
+#        π = convert(Vector{T}, nₘ/m)
+#        scale = range(convert(T, 0.95), step=convert(T, 0.001), stop=convert(T, 1.1))
+#
+#        M_test_list = [nothing, rand(scale, p, m) .* M]
+#        π_test_list = [nothing, ones(T,m)/m]
+#        γ_test_list = [nothing, zero(T), convert(T, 0.5), one(T)]
+#
+#        LDM = DA.LinearDiscriminantModel{T}
+#
+#        for M_test in M_test_list, π_test in π_test_list, γ_test in γ_test_list
+#            Xc = X .- (M_test === nothing ? M[:, y] : M_test[:, y])
+#            Σ = (transpose(Xc)*Xc) ./ (n-m)
+#
+#            if !(γ_test === nothing)
+#                Σ = (1-γ_test)*Σ + γ_test*(tr(Σ)/p)*I
+#            end
+#
+#            lda_test = DA._fit!(LDM(), y, copy(X), 2, false, M_test, π_test, γ_test)
+#
+#            @test lda_test.fit == true
+#            @test lda_test.dims == 1
+#            @test isapprox(lda_test.M, M_test === nothing ? M : M_test)
+#            @test isapprox(lda_test.detΣ, det(Σ))
+#        end
+#    end
+#end
 # eigen(Σ_between, Σ_within).vectors
 #W_svd*transpose(svd((.√(πₖ) .* Mc)*W_svd).Vt)
 #W_chol*transpose(svd((.√(πₖ) .* Mc)*W_chol).Vt)

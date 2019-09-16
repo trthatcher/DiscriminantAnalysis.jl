@@ -126,110 +126,161 @@ end
     @test DA.class_counts!(Vector{Int}(undef, m), y) == [nₖ for i = 1:m]
 end
 
-@testset "_class_centroids!(M, X, y)" begin
-    nₖ = [45, 55]
-    n = sum(nₖ)
-    p = 3
+@testset "_class_statistics!(M, nₘ, X, y)" begin
+    nₘ = [45, 55, 100]
+    m = length(nₘ)
+    n = sum(nₘ)
+    p = 5
 
     for T in (Float32, Float64)
-        X, y, M = random_data(T, nₖ, p)
-        Xt = transpose(copy(transpose(X)))
-        Mt = transpose(copy(transpose(M)))
-        
-        # test predictor dimensionality
-        @test_throws DimensionMismatch DA._class_centroids!(zeros(T,2,p+1), X,  y)
-        @test_throws DimensionMismatch DA._class_centroids!(zeros(T,2,p-1), X,  y)
-        @test_throws DimensionMismatch DA._class_centroids!(zeros(T,2,p+1), Xt, y)
-        @test_throws DimensionMismatch DA._class_centroids!(zeros(T,2,p-1), Xt, y)
+        X, y, M = random_data(T, nₘ, p)
+        Xtt = transpose(copy(transpose(X)))
+        Mtt = transpose(copy(transpose(M)))
 
-        # test observation dimensionality
-        @test_throws DimensionMismatch DA._class_centroids!(similar(M),  X,  zeros(Int,n+1))
-        @test_throws DimensionMismatch DA._class_centroids!(similar(M),  X,  zeros(Int,n-1))
-        @test_throws DimensionMismatch DA._class_centroids!(similar(Mt), Xt, zeros(Int,n+1))
-        @test_throws DimensionMismatch DA._class_centroids!(similar(Mt), Xt, zeros(Int,n-1))
+        for X_test in (X, Xtt)
+            nₘ_test = copy(nₘ)
+            # test predictor dimensionality
+            @test_throws DimensionMismatch DA._class_statistics!(zeros(T,2,p+1), nₘ_test, X_test,  y)
+            @test_throws DimensionMismatch DA._class_statistics!(zeros(T,2,p-1), nₘ_test, X_test,  y)
 
-        # test indexing of class_centroids
-        y_test = copy(y)
+            # test observation dimensionality
+            @test_throws DimensionMismatch DA._class_statistics!(similar(M), nₘ_test, X_test, zeros(Int,n+1))
+            @test_throws DimensionMismatch DA._class_statistics!(similar(M), nₘ_test, X_test, zeros(Int,n-1))
 
-        y_test[p] = 3
-        @test_throws BoundsError DA._class_centroids!(similar(M),  X,  y_test)
-        @test_throws BoundsError DA._class_centroids!(similar(Mt), Xt, y_test)
+            # test count dimensionality
+            @test_throws DimensionMismatch DA._class_statistics!(similar(M), zeros(Int,m+1), X_test, y)
+            @test_throws DimensionMismatch DA._class_statistics!(similar(M), zeros(Int,m-1), X_test, y)
 
-        y_test[p] = 0
-        @test_throws BoundsError DA._class_centroids!(similar(M),  X,  y_test)
-        @test_throws BoundsError DA._class_centroids!(similar(Mt), Xt, y_test)
+            # test indexing of class_statistics
+            y_test = copy(y)
+            y_test[1] = 0
+            @test_throws BoundsError DA._class_statistics!(similar(M), nₘ_test, X_test, y_test)
 
-        # test observation count
-        y_test = copy(y)
-        y_test .= 2
-
-        @test_throws ErrorException DA._class_centroids!(similar(M),  X,  y_test)
-        @test_throws ErrorException DA._class_centroids!(similar(Mt), Xt, y_test)
+            y_test[1] = m+1
+            @test_throws BoundsError DA._class_statistics!(similar(M), nₘ_test, X_test, y_test)
+        end
 
         # test mean computation
-        M_test = similar(M)
-        M_res = DA._class_centroids!(M_test, X, y)
-        @test M_res === M_test
-        @test isapprox(M, M_test)
+        for (M_test, X_test) in ((copy(M), X), (deepcopy(Mtt), Xtt))
+            nₘ_test = zeros(Int, m)
 
-        Mt_test = transpose(similar(transpose(M)))
-        Mt_res = DA._class_centroids!(Mt_test, Xt, y)
-        @test Mt_res === Mt_test
-        @test isapprox(Mt, Mt_test)
+            M_res, nₘ_res = DA._class_statistics!(M_test, nₘ_test, X, y)
+            
+            @test nₘ_res === nₘ_test
+            @test nₘ_res == nₘ
+
+            @test M_res === M_test
+            @test isapprox(M, M_test)
+        end
     end
 end
 
-@testset "class_centroids!(M, X, y; dims)" begin
-    nₖ = [45, 55]
-    n = sum(nₖ)
-    p = 3
 
-    for T in (Float32, Float64)
-        X, y, M = random_data(T, nₖ, p)
-        Xt = copy(transpose(X))
-        Mt = copy(transpose(M))
 
-        # Check dims argument
-        @test_throws ArgumentError DA.class_centroids!(similar(M), X, y, dims=0)
-        @test_throws ArgumentError DA.class_centroids!(similar(M), X, y, dims=3)
-
-        # Test predictor dimensionality
-        @test_throws DimensionMismatch DA.class_centroids!(similar(M), X,  zeros(Int,n+1))
-        @test_throws DimensionMismatch DA.class_centroids!(similar(M), X,  zeros(Int,n-1))
-
-        @test_throws DimensionMismatch DA.class_centroids!(similar(Mt), Xt, zeros(Int,n+1), dims=2)
-        @test_throws DimensionMismatch DA.class_centroids!(similar(Mt), Xt, zeros(Int,n-1), dims=2)
-
-        # test indexing of class_centroids - careful of k argument
-        y_test = copy(y)
-
-        y_test[p] = 3
-        @test_throws BoundsError DA.class_centroids!(similar(M), X, y_test, dims=1)
-        @test_throws BoundsError DA.class_centroids!(similar(Mt), Xt, y_test, dims=2)
-
-        y_test[p] = 0
-        @test_throws BoundsError DA.class_centroids!(similar(M), X, y_test, dims=1)
-        @test_throws BoundsError DA.class_centroids!(similar(Mt), Xt, y_test, dims=2)
-
-        # test observation count
-        y_test = copy(y)
-        y_test .= 2
-
-        @test_throws ErrorException DA.class_centroids!(similar(M), X,  y_test, dims=1)
-        @test_throws ErrorException DA.class_centroids!(similar(Mt), Xt, y_test, dims=2)
-
-        # test mean computation
-        M_test = similar(M)
-        M_res = DA.class_centroids!(M_test, X, y, dims=1)
-        @test M_res === M_test
-        @test isapprox(M_test, M)
-
-        Mt_test = similar(Mt)
-        Mt_res = DA.class_centroids!(Mt_test, Xt, y, dims=2)
-        @test Mt_res === Mt_test
-        @test isapprox(Mt_test, Mt)
-    end
-end
+#@testset "_class_centroids!(M, X, y)" begin
+#    nₖ = [45, 55]
+#    n = sum(nₖ)
+#    p = 3
+#
+#    for T in (Float32, Float64)
+#        X, y, M = random_data(T, nₖ, p)
+#        Xt = transpose(copy(transpose(X)))
+#        Mt = transpose(copy(transpose(M)))
+#        
+#        # test predictor dimensionality
+#        @test_throws DimensionMismatch DA._class_centroids!(zeros(T,2,p+1), X,  y)
+#        @test_throws DimensionMismatch DA._class_centroids!(zeros(T,2,p-1), X,  y)
+#        @test_throws DimensionMismatch DA._class_centroids!(zeros(T,2,p+1), Xt, y)
+#        @test_throws DimensionMismatch DA._class_centroids!(zeros(T,2,p-1), Xt, y)
+#
+#        # test observation dimensionality
+#        @test_throws DimensionMismatch DA._class_centroids!(similar(M),  X,  zeros(Int,n+1))
+#        @test_throws DimensionMismatch DA._class_centroids!(similar(M),  X,  zeros(Int,n-1))
+#        @test_throws DimensionMismatch DA._class_centroids!(similar(Mt), Xt, zeros(Int,n+1))
+#        @test_throws DimensionMismatch DA._class_centroids!(similar(Mt), Xt, zeros(Int,n-1))
+#
+#        # test indexing of class_centroids
+#        y_test = copy(y)
+#
+#        y_test[p] = 3
+#        @test_throws BoundsError DA._class_centroids!(similar(M),  X,  y_test)
+#        @test_throws BoundsError DA._class_centroids!(similar(Mt), Xt, y_test)
+#
+#        y_test[p] = 0
+#        @test_throws BoundsError DA._class_centroids!(similar(M),  X,  y_test)
+#        @test_throws BoundsError DA._class_centroids!(similar(Mt), Xt, y_test)
+#
+#        # test observation count
+#        y_test = copy(y)
+#        y_test .= 2
+#
+#        @test_throws ErrorException DA._class_centroids!(similar(M),  X,  y_test)
+#        @test_throws ErrorException DA._class_centroids!(similar(Mt), Xt, y_test)
+#
+#        # test mean computation
+#        M_test = similar(M)
+#        M_res = DA._class_centroids!(M_test, X, y)
+#        @test M_res === M_test
+#        @test isapprox(M, M_test)
+#
+#        Mt_test = transpose(similar(transpose(M)))
+#        Mt_res = DA._class_centroids!(Mt_test, Xt, y)
+#        @test Mt_res === Mt_test
+#        @test isapprox(Mt, Mt_test)
+#    end
+#end
+#
+#@testset "class_centroids!(M, X, y; dims)" begin
+#    nₖ = [45, 55]
+#    n = sum(nₖ)
+#    p = 3
+#
+#    for T in (Float32, Float64)
+#        X, y, M = random_data(T, nₖ, p)
+#        Xt = copy(transpose(X))
+#        Mt = copy(transpose(M))
+#
+#        # Check dims argument
+#        @test_throws ArgumentError DA.class_centroids!(similar(M), X, y, dims=0)
+#        @test_throws ArgumentError DA.class_centroids!(similar(M), X, y, dims=3)
+#
+#        # Test predictor dimensionality
+#        @test_throws DimensionMismatch DA.class_centroids!(similar(M), X,  zeros(Int,n+1))
+#        @test_throws DimensionMismatch DA.class_centroids!(similar(M), X,  zeros(Int,n-1))
+#
+#        @test_throws DimensionMismatch DA.class_centroids!(similar(Mt), Xt, zeros(Int,n+1), dims=2)
+#        @test_throws DimensionMismatch DA.class_centroids!(similar(Mt), Xt, zeros(Int,n-1), dims=2)
+#
+#        # test indexing of class_centroids - careful of k argument
+#        y_test = copy(y)
+#
+#        y_test[p] = 3
+#        @test_throws BoundsError DA.class_centroids!(similar(M), X, y_test, dims=1)
+#        @test_throws BoundsError DA.class_centroids!(similar(Mt), Xt, y_test, dims=2)
+#
+#        y_test[p] = 0
+#        @test_throws BoundsError DA.class_centroids!(similar(M), X, y_test, dims=1)
+#        @test_throws BoundsError DA.class_centroids!(similar(Mt), Xt, y_test, dims=2)
+#
+#        # test observation count
+#        y_test = copy(y)
+#        y_test .= 2
+#
+#        @test_throws ErrorException DA.class_centroids!(similar(M), X,  y_test, dims=1)
+#        @test_throws ErrorException DA.class_centroids!(similar(Mt), Xt, y_test, dims=2)
+#
+#        # test mean computation
+#        M_test = similar(M)
+#        M_res = DA.class_centroids!(M_test, X, y, dims=1)
+#        @test M_res === M_test
+#        @test isapprox(M_test, M)
+#
+#        Mt_test = similar(Mt)
+#        Mt_res = DA.class_centroids!(Mt_test, Xt, y, dims=2)
+#        @test Mt_res === Mt_test
+#        @test isapprox(Mt_test, Mt)
+#    end
+#end
 
 @testset "regularize!(Σ₁, Σ₂, λ)" begin
     for T in (Float32, Float64)
