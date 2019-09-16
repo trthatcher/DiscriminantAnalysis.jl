@@ -107,27 +107,23 @@ end
 
 # Class operations
 
-@testset "class_counts(y; m])" begin
-    nₘ = [45, 55, 50]
-    m = length(nₘ)
-    n = sum(nₘ)
-    p = 3
+@testset "class_counts(nₘ, y)" begin
+    m = 3
+    nₖ = 300
 
-    for T in (Float32, Float64)
-        y = random_data(T, nₘ, p)[2]
+    y = repeat(vec(1:m), outer=nₖ)
 
-        # Test bounds
-        y_tst = copy(y)
+    # Test bounds
+    y_tst = copy(y)
 
-        y_tst[nₘ[1]] = 0
-        @test_throws BoundsError DA.class_counts(y_tst, m=m)
+    y_tst[1] = 0
+    @test_throws BoundsError DA.class_counts!(Vector{Int}(undef, m), y_tst)
 
-        y_tst[nₘ[1]] = m + 1
-        @test_throws BoundsError DA.class_counts(y_tst, m=m)
+    y_tst[1] = m + 1
+    @test_throws BoundsError DA.class_counts!(Vector{Int}(undef, m), y_tst)
 
-        # Test computation
-        @test DA.class_counts(y) == nₘ
-    end
+    # Test computation
+    @test DA.class_counts!(Vector{Int}(undef, m), y) == [nₖ for i = 1:m]
 end
 
 @testset "_class_centroids!(M, X, y)" begin

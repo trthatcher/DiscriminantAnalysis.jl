@@ -64,20 +64,10 @@ end
 
 ### Class Calculations
 
-function class_counts(y::Vector{<:Integer}; m::Integer=maximum(y))
-    nₘ = zeros(Int, m)
-
-    for i = 1:length(y)
-        yᵢ = y[i]
-        1 ≤ yᵢ ≤ m || throw(BoundsError(nₘ, yᵢ))
-        nₘ[yᵢ] += 1
-    end
-
-    return nₘ
-end
-
-function class_counts!(nₘ::Vector{<:Integer}, y::Vector{<:Integer})
+function class_counts!(nₘ::Vector{T}, y::Vector{<:Integer}) where {T<:Integer}
     m = length(nₘ)
+
+    nₘ .= zero(T)
 
     for i = 1:length(y)
         yᵢ = y[i]
@@ -215,6 +205,8 @@ function regularize!(Σ::AbstractMatrix{T}, γ::T) where {T}
     return Σ
 end
 
+
+### Data Whitening Functions
 
 """
     whiten_data!(X; dims, df)

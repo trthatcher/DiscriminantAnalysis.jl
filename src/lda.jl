@@ -89,7 +89,6 @@ function _fit!(LDA::LinearDiscriminantModel{T},
         validate_priors(priors)
         LDA.π = copyto!(similar(priors, T), priors)
     end
-    #check_priors(LDA.π)
 
     # Compute centroids from data if not specified
     if centroids === nothing
