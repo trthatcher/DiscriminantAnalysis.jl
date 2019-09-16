@@ -13,6 +13,40 @@
     end
 end
 
+@testset "check_data_dims(X, y; dims)" begin
+    n = 10
+    p = 5
+    for T in (Float32, Float64)
+        X = zeros(T, n, p)
+        y = zeros(Int, n)
+
+        @test_throws ArgumentError DA.check_data_dims(X, y, dims=0)
+        @test_throws ArgumentError DA.check_data_dims(X, y, dims=3)
+
+        # check parameter dimensionality for row-based data
+
+        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, n+1, p), y, dims=1)
+        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, n-1, p), y, dims=1)
+
+        @test_throws DimensionMismatch DA.check_data_dims(X, zeros(Int, n+1), dims=1)
+        @test_throws DimensionMismatch DA.check_data_dims(X, zeros(Int, n-1), dims=1)
+
+        @test (n, p) == DA.check_data_dims(X, y, dims=1)
+
+        # check parameter dimensionality for column-based data
+
+        Xt = transpose(X)
+
+        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, p, n+1), y, dims=2)
+        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, p, n-1), y, dims=2)
+
+        @test_throws DimensionMismatch DA.check_data_dims(Xt, zeros(Int, n+1), dims=2)
+        @test_throws DimensionMismatch DA.check_data_dims(Xt, zeros(Int, n-1), dims=2)
+
+        @test (n, p) == DA.check_data_dims(Xt, y, dims=2)
+    end
+end
+
 @testset "check_centroid_dims(M, X; dims)" begin
     n = 20
     p = 5
@@ -49,89 +83,25 @@ end
     end
 end
 
-@testset "check_centroid_dims(M, π; dims)" begin
-    k = 3
-    p = 5
-    for T in (Float32, Float64)
-        M = zeros(T, k, p)
-        π = zeros(T, k)
+# Data Validation
 
-        @test_throws ArgumentError DA.check_centroid_dims(M, π, dims=0)
-        @test_throws ArgumentError DA.check_centroid_dims(M, π, dims=3)
-
-        # check parameter dimensionality for row-based data
-
-        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k+1, p), π, dims=1)
-        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k-1, p), π, dims=1)
-
-        @test_throws DimensionMismatch DA.check_centroid_dims(M, zeros(T, k+1), dims=1)
-        @test_throws DimensionMismatch DA.check_centroid_dims(M, zeros(T, k-1), dims=1)
-
-        @test (k, p) == DA.check_centroid_dims(M, π, dims=1)
-
-        # check parameter dimensionality for column-based data
-
-        Mt = transpose(M)
-
-        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k+1, p), π, dims=2)
-        @test_throws DimensionMismatch DA.check_centroid_dims(zeros(T, k-1, p), π, dims=2)
-
-        @test_throws DimensionMismatch DA.check_centroid_dims(Mt, zeros(T, k+1), dims=2)
-        @test_throws DimensionMismatch DA.check_centroid_dims(Mt, zeros(T, k-1), dims=2)
-
-        @test (k, p) == DA.check_centroid_dims(Mt, π, dims=2)
-    end
-end
-
-@testset "check_data_dims(X, y; dims)" begin
-    n = 10
-    p = 5
-    for T in (Float32, Float64)
-        X = zeros(T, n, p)
-        y = zeros(Int, n)
-
-        @test_throws ArgumentError DA.check_data_dims(X, y, dims=0)
-        @test_throws ArgumentError DA.check_data_dims(X, y, dims=3)
-
-        # check parameter dimensionality for row-based data
-
-        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, n+1, p), y, dims=1)
-        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, n-1, p), y, dims=1)
-
-        @test_throws DimensionMismatch DA.check_data_dims(X, zeros(Int, n+1), dims=1)
-        @test_throws DimensionMismatch DA.check_data_dims(X, zeros(Int, n-1), dims=1)
-
-        @test (n, p) == DA.check_data_dims(X, y, dims=1)
-
-        # check parameter dimensionality for column-based data
-
-        Xt = transpose(X)
-
-        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, p, n+1), y, dims=2)
-        @test_throws DimensionMismatch DA.check_data_dims(zeros(T, p, n-1), y, dims=2)
-
-        @test_throws DimensionMismatch DA.check_data_dims(Xt, zeros(Int, n+1), dims=2)
-        @test_throws DimensionMismatch DA.check_data_dims(Xt, zeros(Int, n-1), dims=2)
-
-        @test (n, p) == DA.check_data_dims(Xt, y, dims=2)
-    end
-end
-
-@testset "check_priors(X, π)" begin
+@testset "validate_priors(π)" begin
     k = 10
     for T in (Float32, Float64)
-        # Check totals
-        @test_throws ArgumentError DA.check_priors(T[0.3; 0.3; 0.3])
-        @test_throws ArgumentError DA.check_priors(T[0.4; 0.4; 0.4])
-
         # Check probability domain
-        @test_throws DomainError DA.check_priors(T[1.0; -0.5; 0.5])
+        @test_throws DomainError DA.validate_priors(T[0.5; 0.5; 0.0])
+        @test_throws DomainError DA.validate_priors(T[1.0; 0.0; 0.0])
+
+        # Check totals
+        @test_throws ArgumentError DA.validate_priors(T[0.3; 0.3; 0.3])
+        @test_throws ArgumentError DA.validate_priors(T[0.4; 0.4; 0.4])
 
         # Test valid π
         π = rand(T, k)
-        broadcast!(/, π, π, sum(π))
+        π ./= sum(π)
+        #broadcast!(/, π, π, sum(π))
 
-        @test k == DA.check_priors(π)
+        @test k == DA.validate_priors(π)
     end
 end
 

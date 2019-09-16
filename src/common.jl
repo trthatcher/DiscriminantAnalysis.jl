@@ -11,36 +11,6 @@ function check_dims(X::AbstractMatrix; dims::Integer)
     return (n, p)
 end
 
-function check_centroid_dims(M::AbstractMatrix, X::AbstractMatrix; dims::Integer)
-    n, p = check_dims(X, dims=dims)
-    m, p₂ = check_dims(M, dims=dims)
-    
-    if p != p₂
-        rc = dims == 1 ? "columns" : "rows"
-        msg = "the number of $(rc) in centroid matrix M must match the number of $(rc) " *
-              "in data matrix X (got $(p₂) and $(p))"
-
-        throw(DimensionMismatch(msg))
-    end
-
-    return (n, p, m)
-end
-
-function check_centroid_dims(M::AbstractMatrix, π::AbstractVector; dims::Integer)
-    m, p = check_dims(M, dims=dims)
-    m₂ = length(π)
-
-    if m != m₂
-        rc = dims == 1 ? "columns" : "rows"
-        msg = "the number of $(rc) in centroid matrix M must match the length of class " *
-              "index vector y (got $(m) and $(m₂))"
-
-        throw(DimensionMismatch(msg))
-    end
-
-    return (m, p)
-end
-
 function check_data_dims(X::AbstractMatrix, y::AbstractVector; dims::Integer)
     n, p = check_dims(X, dims=dims)
     n₂ = length(y)
@@ -56,15 +26,36 @@ function check_data_dims(X::AbstractMatrix, y::AbstractVector; dims::Integer)
     return n, p
 end
 
-function check_priors(π::AbstractVector{T}) where T
-    total = sum(π)
+function check_centroid_dims(M::AbstractMatrix, X::AbstractMatrix; dims::Integer)
+    n, p = check_dims(X, dims=dims)
+    m, p₂ = check_dims(M, dims=dims)
+    
+    if p != p₂
+        rc = dims == 1 ? "columns" : "rows"
+        msg = "the number of $(rc) in centroid matrix M must match the number of $(rc) " *
+              "in data matrix X (got $(p₂) and $(p))"
 
-    if !isapprox(total, one(T))
-        throw(ArgumentError("class priors vector π must sum to 1 (got $(total))"))
+        throw(DimensionMismatch(msg))
     end
 
-    if any(π .≤ 0)
-        throw(DomainError(π, "all class priors πₖ must be positive probabilities"))
+    return (n, p, m)
+end
+
+### Data/Parameter Validation
+
+function validate_priors(π::AbstractVector{T}) where T
+    total = zero(T)
+
+    for (k, πₖ) in enumerate(π)
+        if !(zero(T) < πₖ < one(T))
+            throw(DomainError(πₖ, "class prior probability at index $(k) must be in the " *
+                                  "open interval (0,1)"))
+        end
+        total += πₖ
+    end
+    
+    if !isapprox(total, one(T))
+        throw(ArgumentError("class priors vector π must sum to 1 (got $(total))"))
     end
 
     return length(π)
