@@ -155,7 +155,7 @@ end
         LDM = DA.LinearDiscriminantModel{T}
 
         for M_test in M_test_list, π_test in π_test_list, γ_test in γ_test_list
-            Xc = X .- M[y, :]
+            Xc = X .- (M_test === nothing ? M[y, :] : M_test[y, :])
             Σ = (transpose(Xc)*Xc) ./ (n-m)
 
             if !(γ_test === nothing)
@@ -167,7 +167,7 @@ end
             @test lda_test.fit == true
             @test lda_test.dims == 1
             @test isapprox(lda_test.M, M_test === nothing ? M : M_test)
-            #@test isapprox(lda_test.detΣ, det(Σ))
+            @test isapprox(lda_test.detΣ, det(Σ))
         end
     end
 end

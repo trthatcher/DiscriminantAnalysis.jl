@@ -69,7 +69,9 @@ function _fit!(LDA::LinearDiscriminantModel{T},
                gamma::Union{Nothing,Real}=nothing) where T
     n, p = check_data_dims(X, y, dims=dims)
     m = maximum(y)
+
     LDA.dims = dims
+    is_row = dims == 1
 
     if gamma !== nothing
         0 ≤ gamma ≤ 1 || throw(DomainError(gamma, "γ must be in the interval [0,1]"))
@@ -90,7 +92,7 @@ function _fit!(LDA::LinearDiscriminantModel{T},
 
     # Compute centroids from data if not specified
     if centroids === nothing
-        LDA.M = dims == 1 ? zeros(T, m, p) : zeros(T, p, m)
+        LDA.M = is_row ? zeros(T, m, p) : zeros(T, p, m)
         class_centroids!(LDA.M, X, y, dims=dims)
     else
         check_centroid_dims(centroids, X, dims=dims)
@@ -101,9 +103,11 @@ function _fit!(LDA::LinearDiscriminantModel{T},
     end
 
     # Overall centroid is prior-weighted average of class centroids
-    LDA.μ = LDA.dims == 1 ? vec(transpose(LDA.π)*LDA.M) : LDA.M*LDA.π
+    LDA.μ = is_row ? vec(transpose(LDA.π)*LDA.M) : LDA.M*LDA.π
 
-    center_classes!(X, LDA.M, y, dims=dims)
+    # Center the data matrix with respect to classes to compute whitening matrix
+    X .-= is_row ? view(LDA.M, y, :) : view(LDA.M, :, y)
+    #center_classes!(X, LDA.M, y, dims=dims)
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if LDA.γ === nothing
