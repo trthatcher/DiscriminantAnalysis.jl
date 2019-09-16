@@ -125,48 +125,6 @@ end
 
 
 """
-    _center_classes!(X, M, y)
-
-Backend for `center_classes!` - assumes `dims=1`.
-"""
-function _center_classes!(X::AbstractMatrix, M::AbstractMatrix, y::Vector{<:Integer})
-    n, p, m = check_centroid_dims(M, X, dims=1)
-    check_data_dims(X, y, dims=1)
-    
-    for i = 1:n
-        yᵢ = y[i]
-        1 ≤ yᵢ ≤ m || throw(BoundsError(M, (yᵢ, 1)))
-        @inbounds for j = 1:p
-            X[i, j] -= M[yᵢ, j]
-        end
-    end
-
-    return X
-end
-
-
-"""
-    center_classes!(X, M, y)
-
-Overwrites `X` with centered version using centroids from `M` based on class labels `y`. 
-Use `dims=1` for row-based observations and `dims=2` for column-based observations. 
-"""
-function center_classes!(X::AbstractMatrix, M::AbstractMatrix, y::Vector{<:Integer}; 
-                         dims::Integer=1)
-    if dims == 1
-        return _center_classes!(X, M, y)
-    else
-        check_centroid_dims(M, X, dims=dims)
-        check_data_dims(X, y, dims=2)
-
-        _center_classes!(transpose(X), transpose(M), y)
-
-        return X
-    end
-end
-
-
-"""
     regularize!(Σ₁, Σ₂, λ)
 """
 function regularize!(Σ₁::AbstractMatrix{T}, Σ₂::AbstractMatrix{T}, λ::T) where {T}
