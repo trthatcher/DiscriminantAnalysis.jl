@@ -22,7 +22,7 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
 
     if p ≤ m-1
         # no dimensionality reduction is possible
-        LDA.C = Matrix{Float64}(I, p, p)
+        LDA.C = Matrix{T}(I, p, p)
         LDA.A = copy(LDA.W)
     elseif Θ.dims == 1
         # center M by overall centroid

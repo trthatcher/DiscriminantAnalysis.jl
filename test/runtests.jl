@@ -2,6 +2,13 @@ using Test, LinearAlgebra, Statistics, DiscriminantAnalysis
 
 const DA = DiscriminantAnalysis
 
+function random_centroids(T::Type{<:AbstractFloat}, m::Int, p::Int)
+    M = zeros(T, p, m)
+    for k = 1:m
+        M[:, k] = T[rand() < 0.5 ? -2k : 2k for i = 1:p]
+    end
+    return M
+end
 
 function random_data(T::Type{<:AbstractFloat}, nₘ::Vector{Int}, p::Int)
     n = sum(nₘ)
@@ -13,17 +20,15 @@ function random_data(T::Type{<:AbstractFloat}, nₘ::Vector{Int}, p::Int)
     ix = sortperm(rand(n))
 
     y = [k for (k, nₖ) in enumerate(nₘ) for i = 1:nₖ][ix]
+    M = random_centroids(T, m, p)
 
     for (k, nₖ) in enumerate(nₘ)
         Xₖ = randn(T, p, nₖ)
+
         Xₖ .-= mean(Xₖ, dims=2)
-
-        μ = T[rand() < 0.5 ? -2k : 2k for i = 1:p]
-
-        Xₖ .+= μ
+        Xₖ .+= view(M, :, k)
 
         X[:, y .== k] = Xₖ
-        M[:, k] = μ
     end
 
     return (X, y, M)
