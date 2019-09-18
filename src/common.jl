@@ -11,36 +11,6 @@ function check_dims(X::AbstractMatrix; dims::Integer)
     return (n, p)
 end
 
-function check_data_dims(X::AbstractMatrix, y::AbstractVector; dims::Integer)
-    n, p = check_dims(X, dims=dims)
-    n₂ = length(y)
-
-    if n != n₂
-        rc = dims == 1 ? "rows" : "columns"
-        msg = "the number of $(rc) in data matrix X must match the length of class index " *
-              "vector y (got $(n) and $(n₂))"
-
-        throw(DimensionMismatch(msg))
-    end
-
-    return n, p
-end
-
-function check_centroid_dims(M::AbstractMatrix, X::AbstractMatrix; dims::Integer)
-    n, p = check_dims(X, dims=dims)
-    m, p₂ = check_dims(M, dims=dims)
-    
-    if p != p₂
-        rc = dims == 1 ? "columns" : "rows"
-        msg = "the number of $(rc) in centroid matrix M must match the number of $(rc) " *
-              "in data matrix X (got $(p₂) and $(p))"
-
-        throw(DimensionMismatch(msg))
-    end
-
-    return (n, p, m)
-end
-
 
 ### Data/Parameter Validation
 
@@ -99,10 +69,17 @@ Backend for `class_statistics!` - assumes `dims=2`.
 """
 function _class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::AbstractMatrix, 
                             y::Vector{<:Integer})
-    n, p, m = check_centroid_dims(M, X, dims=2)
-    check_data_dims(X, y, dims=2)
+    n, p = check_dims(X, dims=2)
+    m, p₂ = check_dims(M, dims=2)
+    n₂ = length(y)
+    m₂ = length(nₘ)
 
-    length(nₘ) == m || throw(DimensionMismatch("length of nₘ must match M"))
+    p == p₂ || throw(DimensionMismatch("predictor count along dimension 1 of X must " *
+                                       "match dimension 1 of M (got $(p) and $(p₂))"))
+    n == n₂ || throw(DimensionMismatch("observation count along length of y must match " *
+                                       "dimension 2 of X (got $(n) and $(n₂))"))
+    m == m₂ || throw(DimensionMismatch("class count along length of nₘ must match " *
+                                       "dimension 1 of M (got $(m₂) and $(m))"))
 
     T = eltype(nₘ)
 
@@ -133,8 +110,18 @@ Overwrites matrix `M` with class centroids from `X` based on class indexes from 
 function class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::AbstractMatrix, 
                            y::Vector{<:Integer}; dims::Integer=1)
     if dims == 1
-        check_centroid_dims(M, X, dims=1)
-        check_data_dims(X, y, dims=1)
+        n, p = check_dims(X, dims=2)
+        m, p₂ = check_dims(M, dims=2)
+        n₂ = length(y)
+        m₂ = length(nₘ)
+    
+        p == p₂ || throw(DimensionMismatch("predictor count along dimension 2 of X must " *
+                                           "match dimension 2 of M (got $(p) and $(p₂))"))
+        n == n₂ || throw(DimensionMismatch("observation count along length of y must " *
+                                           "match dimension 1 of X (got $(n) and $(n₂))"))
+        m == m₂ || throw(DimensionMismatch("class count along length of nₘ must match " *
+                                           "dimension 2 of M (got $(m₂) and $(m))"))
+
         _class_statistics!(transpose(M), nₘ, transpose(X), y)
         return (M, nₘ)
     elseif dims ==2
