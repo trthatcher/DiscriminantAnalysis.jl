@@ -26,11 +26,11 @@
         # Test row-data
         for W in (W_svd, W_chol)
             lda_test = LDM()
-            lda_test.dims = 1
-            lda_test.M = copy(M)
-            lda_test.π = copy(π)
+            lda_test.Θ.dims = 1
+            lda_test.Θ.M = copy(M)
+            lda_test.Θ.π = copy(π)
+            lda_test.Θ.μ = copy(vec(μ))
             lda_test.W = copy(W)
-            lda_test.μ = copy(vec(μ))
 
             DA.canonical_coordinates!(lda_test)
             C_res = W*lda_test.C
@@ -40,11 +40,11 @@
         # Test column-data
         for W in (W_svd, W_chol)
             lda_test = LDM()
-            lda_test.dims = 2
-            lda_test.M = copy(transpose(M))
-            lda_test.π = copy(π)
+            lda_test.Θ.dims = 2
+            lda_test.Θ.M = copy(transpose(M))
+            lda_test.Θ.π = copy(π)
+            lda_test.Θ.μ = copy(vec(μ))
             lda_test.W = copy(transpose(W))
-            lda_test.μ = copy(vec(μ))
 
             DA.canonical_coordinates!(lda_test)
             C_res = lda_test.C*transpose(W)
@@ -80,10 +80,10 @@ end
 
             lda_test = DA.fit!(LDM(), y, copy(X), 2, false, M_test, π_test, γ_test)
 
-            @test lda_test.fit == true
-            @test lda_test.dims == 2
-            @test isapprox(lda_test.M, M_test === nothing ? M : M_test)
-            @test isapprox(lda_test.detΣ, det(Σ))
+            @test lda_test.Θ.fit == true
+            @test lda_test.Θ.dims == 2
+            @test isapprox(lda_test.Θ.M, M_test === nothing ? M : M_test)
+            @test isapprox(lda_test.Θ.detΣ, det(Σ))
         end
     end
 end

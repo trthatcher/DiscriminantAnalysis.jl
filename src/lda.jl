@@ -1,58 +1,41 @@
-
-
-
 # Linear Discriminant Analysis
 
 mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     "Model fit indicator - `true` if model has been fit"
-    fit::Bool
-    "Dimension along which observations are stored (1 for rows, 2 for columns)"
-    dims::Int
-    "Whitening transform for overall covariance matrix"
-    W::AbstractMatrix{T}
-    "Determinant of the covariance matrix"
-    detΣ::T
-    "Matrix of class centroids (one per row or column - see `dims`)"
-    M::Matrix{T}
-    "Prior-weighted overall centroid"
-    μ::Vector{T}
-    "Vector of class prior probabilities"
-    π::Vector{T}
-    "Vector of Class counts"
-    nₘ::Vector{Int}
+    Θ::DiscriminantParameters{T}
+    "Whitening transformation"
+    W::Matrix{T}
     "Matrix of canonical coordinates"
     C::Union{Nothing,Matrix{T}}
     "Matrix of canonical coordinates with whitening applied"
     A::Union{Nothing,Matrix{T}}
-    "Shrinkage parameter"
-    γ::Union{Nothing,T}
     function LinearDiscriminantModel{T}() where T
-        new{T}(false, 0, Array{T}(undef,0,0), zero(T), Array{T}(undef,0,0), 
-               Array{T}(undef,0), Array{T}(undef,0), Array{Int}(undef,0), nothing, nothing, 
-               nothing)
+        new{T}(DiscriminantParameters{T}(), Matrix{T}(undef,0,0), nothing, nothing)
     end
 end
 
 
 function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
-    m, p = check_dims(LDA.M, dims=LDA.dims)
+    Θ = LDA.Θ
+
+    m, p = check_dims(Θ.M, dims=Θ.dims)
 
     if p ≤ m-1
         # no dimensionality reduction is possible
         LDA.C = Matrix{Float64}(I, p, p)
         LDA.A = copy(LDA.W)
-    elseif LDA.dims == 1
+    elseif Θ.dims == 1
         # center M by overall centroid
-        M = broadcast!(-, similar(LDA.M, T), LDA.M, transpose(LDA.μ))
+        M = broadcast!(-, similar(Θ.M, T), Θ.M, transpose(Θ.μ))
         # Σ_between = Mᵀdiag(π)M so need to scale by sqrt π
-        broadcast!((πₖ, Mₖⱼ) -> √(πₖ)Mₖⱼ, M, LDA.π, M)
+        broadcast!((πₖ, Mₖⱼ) -> √(πₖ)Mₖⱼ, M, Θ.π, M)
         UDVᵀ = svd!(M*LDA.W, full=false)
 
         LDA.C = copy(transpose(view(UDVᵀ.Vt, 1:m-1, :)))
         LDA.A = LDA.W*LDA.C
     else
-        M = broadcast!(-, similar(LDA.M, T), LDA.M, LDA.μ)
-        broadcast!((πₖ, Mⱼₖ) -> √(πₖ)Mⱼₖ, M, transpose(LDA.π), M)
+        M = broadcast!(-, similar(Θ.M, T), Θ.M, Θ.μ)
+        broadcast!((πₖ, Mⱼₖ) -> √(πₖ)Mⱼₖ, M, transpose(Θ.π), M)
         UDVᵀ = svd!(LDA.W*M, full=false)
 
         LDA.C = copy(transpose(view(UDVᵀ.U, :, 1:m-1)))
@@ -61,6 +44,7 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
 
     return LDA
 end
+
 
 """
     fit!(LDA::LinearDiscriminantModel, Y::Matrix, X::Matrix; dims::Integer=1, <keyword arguments>...)
@@ -87,73 +71,16 @@ function fit!(LDA::LinearDiscriminantModel{T},
               centroids::Union{Nothing,AbstractMatrix}=nothing, 
               priors::Union{Nothing,AbstractVector}=nothing,
               gamma::Union{Nothing,Real}=nothing) where T
-    n, p = check_dims(X, dims=dims)
-    m = maximum(y)
-    
-    n₂ = length(y)
-    n₂ == n || throw(DimensionMismatch("observation count along length of class index " *
-                                       "vector y must match dimension $(dims) of data " *
-                                       "matrix X (got $(n₂) and $(n))"))
+    Θ = LDA.Θ
+    parameter_fit!(Θ, y, X, dims, false, centroids, priors, gamma)
 
-    LDA.dims = dims
-    is_row = dims == 1
-    altdims = is_row ? 2 : 1
-
-    if gamma !== nothing
-        0 ≤ gamma ≤ 1 || throw(DomainError(gamma, "γ must be in the interval [0,1]"))
-    end
-    LDA.γ = gamma
-
-    # Compute centroids and class counts from data if not specified
-    if centroids === nothing
-        LDA.M = is_row ? Matrix{T}(undef, m, p) : Matrix{T}(undef, p, m)
-        LDA.nₘ = Vector{Int}(undef, m)
-
-        class_statistics!(LDA.M, LDA.nₘ, X, y, dims=dims)
-    else
-        m₂, p₂ = check_dims(centroids, dims=dims)
-        if m₂ != m
-            throw(DimensionMismatch("class count along dimension $(dims) of centroid " * 
-                                    "matrix M must match maximum class index found in " *
-                                    "class index vector y (got $(m₂) and $(m))"))
-        elseif p₂ != p
-            throw(DimensionMismatch("predictor count along dimension $(altdims) of " *
-                                    "centroid matrix M must match dimension $(dims) of " *
-                                    "data matrix X (got $(p₂) and $(p))"))
-        end
-
-        LDA.M = copyto!(similar(centroids, T), centroids)
-        LDA.nₘ = class_counts!(Vector{Int}(undef, m), y)
-    end
-
-    validate_class_counts(LDA.nₘ)
-
-    # Compute priors from class frequencies in data if not specified
-    if priors === nothing
-        LDA.π = broadcast!(/, Vector{T}(undef, m), LDA.nₘ, n)
-    else
-        m₃ = length(priors)
-        if m₃ != m
-            throw(DimensionMismatch("class count along length of class prior probability " *
-                                    "vector π must match maximum class index found in " *
-                                    "class index vector y (got $(m₃) and $(m))"))
-        end
-        validate_priors(priors)
-
-        LDA.π = copyto!(similar(priors, T), priors)
-    end
-
-    # Overall centroid is prior-weighted average of class centroids
-    LDA.μ = is_row ? vec(transpose(LDA.π)*LDA.M) : LDA.M*LDA.π
-
-    # Center the data matrix with respect to classes to compute whitening matrix
-    X .-= is_row ? view(LDA.M, y, :) : view(LDA.M, :, y)
+    df = size(X, dims) - size(Θ.M, dims)
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
-    if LDA.γ === nothing
-        LDA.W, LDA.detΣ = whiten_data!(X, dims=dims, df=n-m)
+    if Θ.γ === nothing
+        LDA.W, Θ.detΣ = whiten_data!(X, dims=dims, df=df)
     else
-        LDA.W, LDA.detΣ = whiten_data!(X, LDA.γ, dims=dims, df=n-m)
+        LDA.W, Θ.detΣ = whiten_data!(X, Θ.γ, dims=dims, df=df)
     end
 
     # Perform canonical discriminant analysis if applicable
@@ -164,7 +91,7 @@ function fit!(LDA::LinearDiscriminantModel{T},
         LDA.A = nothing
     end
 
-    LDA.fit = true
+    Θ.fit = true
 
     return LDA
 end
@@ -211,7 +138,3 @@ function discriminants!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matri
 
     return Δ
 end
-
-#function discriminants!(LDA::LinearDiscriminantModel{T}, X::Matrix{T}; 
-#                        dims::Integer=1) where T
-#    Δ = Array{T}(undef, dims == 1 ? )
