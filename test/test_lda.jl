@@ -1,88 +1,4 @@
-#@testset "LinearDiscriminantModel" begin
-#    n = 20
-#    p = 5
-#    m = 5
-#    for T in (Float32, Float64)
-#        LDM = DA.LinearDiscriminantModel{T}
-#
-#        # test dims argument
-#        @test_throws ArgumentError LDM(zeros(T, 3, 3), ones(T, 3)/3, dims=0)
-#        @test_throws ArgumentError LDM(zeros(T, 3, 3), ones(T, 3)/3, dims=3)
-#
-#        # test class priors length/number of classes
-#        @test_throws DimensionMismatch LDM(zeros(T, 3, 2), ones(T, 2)/2, dims=1)
-#        @test_throws DimensionMismatch LDM(zeros(T, 3, 2), ones(T, 4)/4, dims=1)
-#
-#        @test_throws DimensionMismatch LDM(zeros(T, 2, 3), ones(T, 2)/2, dims=2)
-#        @test_throws DimensionMismatch LDM(zeros(T, 2, 3), ones(T, 4)/4, dims=2)
-#
-#        # test gamma values
-#        lb = zero(T) - eps(zero(T))
-#        ub = one(T) + eps(one(T))
-#
-#        @test_throws DomainError LDM(zeros(T, 3, 1), ones(T, 3)/3, dims=1, gamma=lb)
-#        @test_throws DomainError LDM(zeros(T, 3, 1), ones(T, 3)/3, dims=1, gamma=ub)
-#
-#        # test prior probabilities
-#        @test_throws ArgumentError LDM(zeros(T, 3, 1), T[0.3; 0.3; 0.3], dims=1)
-#        @test_throws ArgumentError LDM(zeros(T, 3, 1), T[0.4; 0.4; 0.4], dims=1)
-#
-#        @test_throws DomainError LDM(zeros(T, 3, 1), T[1.0; 0.5; -0.5], dims=1)
-#        @test_throws DomainError LDM(zeros(T, 3, 1), T[0.5; 0.5; 0.0], dims=1)
-#
-#        # Test 1: non-canonical
-#        for dims in (1, 2)
-#            M = dims == 1 ? ones(T, m, p) : ones(T, p, m)
-#            lda_test = LDM(M, ones(T, m)/m, dims=dims, canonical=false)
-#
-#            @test lda_test.fit == false
-#            @test lda_test.dims == dims
-#            @test lda_test.W == zeros(T, p, p)
-#            @test lda_test.detΣ == zero(T)
-#            @test lda_test.M == M
-#            @test lda_test.π == ones(T, m)/m
-#            @test lda_test.C === nothing
-#            @test lda_test.A === nothing
-#            @test lda_test.γ === nothing
-#        end
-#
-#        # Test 2: canonical with p > m-1
-#        for dims in (1, 2)
-#            M = dims == 1 ? ones(T, m, p) : ones(T, p, m)
-#            lda_test = LDM(M, ones(T, m)/m, dims=dims, canonical=true, gamma=T(0.5))
-#
-#            d = min(p, m-1)
-#            A_C = dims == 1 ? zeros(T, p, d) : zeros(T, d, p)
-#
-#            @test lda_test.fit == false
-#            @test lda_test.dims == dims
-#            @test lda_test.W == zeros(T, p, p)
-#            @test lda_test.detΣ == zero(T)
-#            @test lda_test.M == M
-#            @test lda_test.π == ones(T, m)/m
-#            @test lda_test.C == A_C
-#            @test lda_test.A == A_C
-#            @test lda_test.γ == T(0.5)
-#        end
-#
-#        # Test 3: canonical with p <= m-1
-#        for dims in (1, 2)
-#            M = dims == 1 ? ones(T, m, m-1) : ones(T, m-1, m)
-#            lda_test = LDM(M, ones(T, m)/m, dims=dims, canonical=true, gamma=T(0.5))
-#
-#            @test lda_test.fit == false
-#            @test lda_test.dims == dims
-#            @test lda_test.W == zeros(T, m-1, m-1)
-#            @test lda_test.detΣ == zero(T)
-#            @test lda_test.M == M
-#            @test lda_test.π == ones(T, m)/m
-#            @test lda_test.C == zeros(T, m-1, m-1)
-#            @test lda_test.A == zeros(T, m-1, m-1)
-#            @test lda_test.γ == T(0.5)
-#        end
-#    end
-#end
-
+@info "Testing lda.jl"
 
 @testset "canonical_coordinates!(LDA)" begin
     p = 10
@@ -137,7 +53,7 @@
     end
 end
 
-@testset "_fit!(LDA)" begin
+@testset "fit!(LDA)" begin
     nₘ = [400; 500; 600]
     p = 10
     n = sum(nₘ)
@@ -162,7 +78,7 @@ end
                 Σ = (1-γ_test)*Σ + γ_test*(tr(Σ)/p)*I
             end
 
-            lda_test = DA._fit!(LDM(), y, copy(X), 2, false, M_test, π_test, γ_test)
+            lda_test = DA.fit!(LDM(), y, copy(X), 2, false, M_test, π_test, γ_test)
 
             @test lda_test.fit == true
             @test lda_test.dims == 2

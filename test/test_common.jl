@@ -1,3 +1,5 @@
+@info "Testing common.jl"
+
 # Dimensionality Checks
 
 @testset "check_dims(X; dims)" begin
@@ -175,6 +177,48 @@ end
     end
 end
 
+
+### Model Parameters
+
+@testset "parameter_fit!(Θ, y, X, dims, args...)" begin
+    nₘ = [400; 500; 600]
+    n = sum(nₘ)
+    m = length(nₘ)
+    p = 10
+
+    for T in (Float32, Float64)
+        X, y, M = random_data(T, nₘ, p)
+        π = convert(Vector{T}, nₘ/n)
+
+        M_tests = [nothing, perturb(M)]
+        π_tests = [nothing, ones(T,m)/m]
+        γ_tests = [nothing, range(zero(T), stop=one(T), length=3)...]
+
+        DP = DA.DiscriminantParameters{T}
+
+        for M_test in M_tests, π_test in π_tests, γ_test in γ_tests
+            Xc = X .- (M_test === nothing ? M[:, y] : M_test[:, y])
+            Σ = (Xc*transpose(Xc)) ./ (n-m)
+
+            if !(γ_test === nothing)
+                Σ = (1-γ_test)*Σ + γ_test*(tr(Σ)/p)*I
+            end
+
+            dp_test = DA.parameter_fit!(DP(), y, copy(X), 2, true, M_test, π_test, γ_test)
+
+            @test dp_test.fit == false
+            @test dp_test.dims == 2
+            @test isapprox(dp_test.M, M_test === nothing ? M : M_test)
+            @test isapprox(dp_test.π, π_test === nothing ? π : π_test)
+            @test dp_test.nₘ == nₘ
+            @test dp_test.γ == γ_test
+            #@test isapprox(dp_test.detΣ, det(Σ))
+        end
+    end
+end
+
+
+### Regularization
 
 @testset "regularize!(Σ₁, Σ₂, λ)" begin
     for T in (Float32, Float64)

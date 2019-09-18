@@ -1,7 +1,10 @@
+
+
+
 # Linear Discriminant Analysis
 
 mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
-    "Model fit indicator"
+    "Model fit indicator - `true` if model has been fit"
     fit::Bool
     "Dimension along which observations are stored (1 for rows, 2 for columns)"
     dims::Int
@@ -9,17 +12,17 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     W::AbstractMatrix{T}
     "Determinant of the covariance matrix"
     detΣ::T
-    "Matrix of class means (one per row/column depending on `dims`)"
+    "Matrix of class centroids (one per row or column - see `dims`)"
     M::Matrix{T}
-    "Overall centroid"
+    "Prior-weighted overall centroid"
     μ::Vector{T}
     "Vector of class prior probabilities"
     π::Vector{T}
-    "Class counts"
+    "Vector of Class counts"
     nₘ::Vector{Int}
-    "Canonical coordinates"
+    "Matrix of canonical coordinates"
     C::Union{Nothing,Matrix{T}}
-    "Canonical coordinates with whitening"
+    "Matrix of canonical coordinates with whitening applied"
     A::Union{Nothing,Matrix{T}}
     "Shrinkage parameter"
     γ::Union{Nothing,T}
@@ -59,19 +62,42 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
     return LDA
 end
 
-function _fit!(LDA::LinearDiscriminantModel{T},
-               y::Vector{<:Integer},
-               X::Matrix{T},
-               dims::Integer=1,
-               canonical::Bool=false,
-               centroids::Union{Nothing,AbstractMatrix}=nothing, 
-               priors::Union{Nothing,AbstractVector}=nothing,
-               gamma::Union{Nothing,Real}=nothing) where T
-    n, p = check_data_dims(X, y, dims=dims)
+"""
+    fit!(LDA::LinearDiscriminantModel, Y::Matrix, X::Matrix; dims::Integer=1, <keyword arguments>...)
+
+Fit a linear discriminant model based on data matrix `X` and class indicator matrix `Y` 
+along dimensions `dims` and overwrite `LDA`.
+
+# Keyword arguments
+- `canonical::Bool=false`: computes canonical coordinates and performs dimensionality
+reduction if `true`
+- `centroids::Matrix`: specifies the class centroids. If `dims` is `1`, then each row 
+represents a class centroid, otherwise each column represents a class centroid. If not 
+specified, the centroids are computed from the data.
+- `priors::Vector`: specifies the class membership prior probabilties. If not specified, 
+the class probabilities a computed based on the class counts
+- `gamma::Real=0`: regularization parameter γ ∈ [0,1] shrinks the within-class covariance 
+matrix towards the identity matrix scaled by the average eigenvalue of the covariance matrix
+"""
+function fit!(LDA::LinearDiscriminantModel{T},
+              y::Vector{<:Integer},
+              X::Matrix{T},
+              dims::Integer=1,
+              canonical::Bool=false,
+              centroids::Union{Nothing,AbstractMatrix}=nothing, 
+              priors::Union{Nothing,AbstractVector}=nothing,
+              gamma::Union{Nothing,Real}=nothing) where T
+    n, p = check_dims(X, dims=dims)
     m = maximum(y)
+    
+    n₂ = length(y)
+    n₂ == n || throw(DimensionMismatch("observation count along length of class index " *
+                                       "vector y must match dimension $(dims) of data " *
+                                       "matrix X (got $(n₂) and $(n))"))
 
     LDA.dims = dims
     is_row = dims == 1
+    altdims = is_row ? 2 : 1
 
     if gamma !== nothing
         0 ≤ gamma ≤ 1 || throw(DomainError(gamma, "γ must be in the interval [0,1]"))
@@ -82,22 +108,38 @@ function _fit!(LDA::LinearDiscriminantModel{T},
     if centroids === nothing
         LDA.M = is_row ? Matrix{T}(undef, m, p) : Matrix{T}(undef, p, m)
         LDA.nₘ = Vector{Int}(undef, m)
+
         class_statistics!(LDA.M, LDA.nₘ, X, y, dims=dims)
     else
-        check_centroid_dims(centroids, X, dims=dims)
-        size(centroids, dims) == m || throw(DimensionMismatch("bad class count in M"))
+        m₂, p₂ = check_dims(centroids, dims=dims)
+        if m₂ != m
+            throw(DimensionMismatch("class count along dimension $(dims) of centroid " * 
+                                    "matrix M must match maximum class index found in " *
+                                    "class index vector y (got $(m₂) and $(m))"))
+        elseif p₂ != p
+            throw(DimensionMismatch("predictor count along dimension $(altdims) of " *
+                                    "centroid matrix M must match dimension $(dims) of " *
+                                    "data matrix X (got $(p₂) and $(p))"))
+        end
+
         LDA.M = copyto!(similar(centroids, T), centroids)
         LDA.nₘ = class_counts!(Vector{Int}(undef, m), y)
     end
 
-    all(LDA.nₘ .≥ 2) || error("must have at least two observations per class")
+    validate_class_counts(LDA.nₘ)
 
     # Compute priors from class frequencies in data if not specified
     if priors === nothing
         LDA.π = broadcast!(/, Vector{T}(undef, m), LDA.nₘ, n)
     else
+        m₃ = length(priors)
+        if m₃ != m
+            throw(DimensionMismatch("class count along length of class prior probability " *
+                                    "vector π must match maximum class index found in " *
+                                    "class index vector y (got $(m₃) and $(m))"))
+        end
         validate_priors(priors)
-        length(priors) == m || throw(DimensionMismatch("bad length"))
+
         LDA.π = copyto!(similar(priors, T), priors)
     end
 
@@ -128,143 +170,42 @@ function _fit!(LDA::LinearDiscriminantModel{T},
 end
 
 
-"""
-    fit!(LDA::LinearDiscriminantModel, y::Vector, X::Matrix)
-
-Fit a linear discriminant model based on data matrix `X` and class index vector `y`. `LDA` 
-will be updated in-place and `X` will be overwritten during the fitting process.
-"""
-function fit!(LDA::LinearDiscriminantModel{T}, y::Vector{<:Integer}, X::Matrix{T}) where T
-    center_classes!(X, y, LDA.M, LDA.dims)
-
-    if LDA.γ === nothing
-        copyto!(LDA.W, whiten_data!(X, LDA.dims))
-    else
-        copyto!(LDA.W, whiten_data!(X, LDA.γ, LDA.dims))
-    end
-    
-    if LDA.C !== nothing
-        M = copy(LDA.M)
-        μ = LDA.dims == 1 ? transpose(LDA.π)*M : M*LDA.π
-        broadcast!(-, M, M, μ)
-        copyto!(LDA.C, canonical_coordinates(M, LDA.W, LDA.dims))
-    end
-
-    LDA.fit = true
-
-    return LDA
-end
-
-"""
-    fit(::Type{LinearDiscriminantModel}, Y::Matrix, X::Matrix; dims::Integer=1, <keyword arguments>...)
-
-Fit a linear discriminant model based on data matrix `X` and class indicator matrix `Y` 
-along dimensions `dims`.
-
-# Keyword arguments
-- `canonical::Bool=false`: computes canonical coordinates and performs dimensionality
-reduction if `true`
-- `centroids::Matrix`: specifies the class centroids. If `dims` is `1`, then each row 
-represents a class centroid, otherwise each column represents a class centroid. If not 
-specified, the centroids are computed from the data.
-- `priors::Vector`: specifies the class membership prior probabilties. If not specified, 
-the class probabilities a computed based on the class counts
-- `gamma::Real=0`: regularization parameter γ ∈ [0,1] shrinks the within-class covariance 
-matrix towards the identity matrix scaled by the average eigenvalue of the covariance matrix
-"""
-function fit(::Type{LinearDiscriminantModel{T}},
-        Y::AbstractMatrix,
-        X::AbstractMatrix;
-        dims::Integer=1,
-        canonical::Bool=false,
-        centroids::Union{Nothing,AbstractMatrix}=nothing, 
-        priors::Union{Nothing,AbstractVector}=nothing,
-        gamma::Union{Nothing,Real}=nothing
-    ) where T<:AbstractFloat
-
-    k = size(Y, dims == 1 ? 2 : 1)
-    p = size(X, dims == 1 ? 2 : 1)
-
-    y = vec(mapslices(argmax, Y; dims=dims == 1 ? 2 : 1))
-
-    if centroids === nothing
-        M = class_means(X, y, dims, k)
-    else
-        M = copyto!(similar(centroids, T), centroids)
-    end
-
-    if priors === nothing
-        nₖ = class_counts(y, k)
-
-        all(nₖ .≥ 2) || error("must have at least two observations per class")
-
-        π = ones(T, k)
-        broadcast!(/, π, π, nₖ)
-    else
-        π = copyto!(similar(priors, T), priors)
-    end
-
-    LDA = LinearDiscriminantModel{T}(M, π, dims, gamma, canonical)
-
-    fit!(LDA, y, X)
-end
-
-function fit(::Type{LinearDiscriminantModel},
-        Y::AbstractMatrix,
-        X::AbstractMatrix{T};
-        dims::Integer=1,
-        canonical::Bool=false,
-        centroids::Union{Nothing,AbstractMatrix}=nothing, 
-        priors::Union{Nothing,AbstractVector}=nothing,
-        gamma::Union{Nothing,Real}=nothing
-    ) where T
-    fit(LinearDiscriminantModel{T}, Y, X, dims=dims, canonical=canonical, 
-        centroids=centroids, priors=priors, gamma=gamma)
-end
-
 function discriminants!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matrix{T}; 
                         dims::Integer=1) where T
-    dims ∈ (1, 2) || arg_error("dims should be 1 or 2 (got $(dims))")
+    n, p = check_dims(X, dims=dims)
+    m, p₂ = check_dims(LDA.M, dims=dims)
+    n₂, m₂ = check_dims(Δ)
+
+    alt_dims = dims == 1 ? 2 : 1
+
+    p == p₂ || throw(DimensionMismatch("predictor count along dimension $(alt_dims) of " *
+                                       "X must match dimension $(dims) of M (got $(p) " *
+                                       "and $(p₂))"))
+    n == n₂ || throw(DimensionMismatch("observation count along dimension $(dims) of X " *
+                                       "must match dimension $(dims) of Δ (got $(n) " *
+                                       "and $(n₂))"))
+    m == m₂ || throw(DimensionMismatch("class count along dimension $(alt_dims) of Δ " *
+                                       "must match dimension $(dims) of M (got $(m) " *
+                                       "and $(m₂))"))
 
     M = LDA.M
     W = LDA.W
 
     if dims == 1
-        k, p = size(M)
-        n = size(Δ, 1)
-
-        size(Δ, 2) == k || dim_error("the number of columns in discriminant matrix Δ " *
-                                     "must match the number of classes")
-
-        size(X, 2) == p || dim_error("the number of columns in data matrix X must match " *
-                                     "the number of columns in centroid matrix M")
-
-        size(X, 1) == n || dim_error("the number of rows in data matrix X must match the " *
-                                     "number of rows in discriminant matrix Δ")
-
         XW = X*W
         MW = M*W
         Z = similar(XW)
-        for j = 1:k
-            broadcast!(-, Z, XW, MW[j, :])
-            sum!(abs2, Δ[:, j], Z)
+        for k = 1:m
+            broadcast!(-, Z, XW, MW[k, :])
+            sum!(abs2, Δ[:, k], Z)
         end
     else
-        p, k = size(M)
-        n = size(Δ, 2)
-
-        size(Δ, 1) == k || dim_error("")
-
-        size(X, 1) == p || dim_error("")
-
-        size(X, 2) == n || dim_error("")
-
         WX = W*X
         WM = W*M
         Z = similar(XW)
-        for i = 1:k
-            broadcast!(-, Z, WX, WM[:, i])
-            sum!(abs2, Δ[i, :], Z)
+        for k = 1:m
+            broadcast!(-, Z, WX, WM[:, k])
+            sum!(abs2, Δ[k, :], Z)
         end
     end
 

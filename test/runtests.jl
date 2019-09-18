@@ -41,10 +41,13 @@ function random_cov(T::Type{<:AbstractFloat}, p::Integer)
     return (Σ, W_svd, W_chol)
 end
 
-@testset "DiscriminantAnalysis.jl" begin
-    @info "Testing common.jl"
-    include("test_common.jl")
+function perturb(M::Matrix{T}, tol::Real=convert(T,0.05)) where {T <: Real}
+    ϵ = convert(T, tol)
+    jitter = range(one(T)-ϵ, stop=one(T)+ϵ, length=10000)
+    return broadcast(x -> x*rand(jitter), M)
+end
 
-    @info "Testing lda.jl"
+@testset "DiscriminantAnalysis.jl" begin
+    include("test_common.jl")
     include("test_lda.jl")
 end

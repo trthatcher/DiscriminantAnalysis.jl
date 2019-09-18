@@ -49,8 +49,8 @@ function validate_priors(π::AbstractVector{T}) where T
 
     for (k, πₖ) in enumerate(π)
         if !(zero(T) < πₖ < one(T))
-            throw(DomainError(πₖ, "class prior probability at index $(k) must be in the " *
-                                  "open interval (0,1)"))
+            throw(DomainError(πₖ, "class prior probability at class index $(k) must be " *
+                                  "in the open interval (0,1)"))
         end
         total += πₖ
     end
@@ -60,6 +60,14 @@ function validate_priors(π::AbstractVector{T}) where T
     end
 
     return length(π)
+end
+
+function validate_class_counts(nₘ::AbstractVector{T}) where {T <: Integer}
+    for (k, nₖ) in enumerate(nₘ)
+        nₖ > 1 || error("class count at class index $(k) must be ")
+    end
+
+    return length(nₘ)
 end
 
 
@@ -135,6 +143,110 @@ function class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::Abstra
         throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
     end
 end
+
+
+### Model Parameters
+
+mutable struct DiscriminantParameters{T}
+    "Model fit indicator - `true` if model has been fit"
+    fit::Bool
+    "Dimension along which observations are stored (1 for rows, 2 for columns)"
+    dims::Int
+    "Matrix of class centroids (one per row or column - see `dims`)"
+    M::Matrix{T}
+    "Prior-weighted overall centroid"
+    μ::Vector{T}
+    "Vector of class prior probabilities"
+    π::Vector{T}
+    "Vector of Class counts"
+    nₘ::Vector{Int}
+    "Shrinkage parameter"
+    γ::Union{Nothing,T}
+    "Overall covariance matrix without `γ` regularization"
+    Σ::Union{Nothing,T}
+    "Determinant of the overall covariance matrix"
+    detΣ::Union{Nothing,T}
+    function DiscriminantParameters{T}() where T
+        new{T}(false, 0, Matrix{T}(undef,0,0), Vector{T}(undef,0), Vector{T}(undef,0),
+               Vector{Int}(undef,0), nothing, nothing, zero(T))
+    end
+end
+
+function parameter_fit!(Θ::DiscriminantParameters{T},
+                        y::Vector{<:Integer},
+                        X::Matrix{T},
+                        dims::Integer,
+                        compute_covariance::Bool,
+                        centroids::Union{Nothing,AbstractMatrix}, 
+                        priors::Union{Nothing,AbstractVector},
+                        gamma::Union{Nothing,Real}) where T
+    n, p = check_dims(X, dims=dims)
+    m = maximum(y)
+    
+    n₂ = length(y)
+    n₂ == n || throw(DimensionMismatch("observation count along length of class index " *
+                                       "vector y must match dimension $(dims) of data " *
+                                       "matrix X (got $(n₂) and $(n))"))
+
+    Θ.dims = dims
+    is_row = dims == 1
+    altdims = is_row ? 2 : 1
+
+    if gamma !== nothing
+        0 ≤ gamma ≤ 1 || throw(DomainError(gamma, "γ must be in the interval [0,1]"))
+    end
+    Θ.γ = gamma
+
+    # Compute centroids and class counts from data if not specified
+    if centroids === nothing
+        Θ.M = is_row ? Matrix{T}(undef, m, p) : Matrix{T}(undef, p, m)
+        Θ.nₘ = Vector{Int}(undef, m)
+
+        class_statistics!(Θ.M, Θ.nₘ, X, y, dims=dims)
+    else
+        m₂, p₂ = check_dims(centroids, dims=dims)
+        if m₂ != m
+            throw(DimensionMismatch("class count along dimension $(dims) of centroid " * 
+                                    "matrix M must match maximum class index found in " *
+                                    "class index vector y (got $(m₂) and $(m))"))
+        elseif p₂ != p
+            throw(DimensionMismatch("predictor count along dimension $(altdims) of " *
+                                    "centroid matrix M must match dimension $(dims) of " *
+                                    "data matrix X (got $(p₂) and $(p))"))
+        end
+
+        Θ.M = copyto!(similar(centroids, T), centroids)
+        Θ.nₘ = class_counts!(Vector{Int}(undef, m), y)
+    end
+
+    validate_class_counts(Θ.nₘ)
+
+    # Compute priors from class frequencies in data if not specified
+    if priors === nothing
+        Θ.π = broadcast!(/, Vector{T}(undef, m), Θ.nₘ, n)
+    else
+        m₃ = length(priors)
+        if m₃ != m
+            throw(DimensionMismatch("class count along length of class prior probability " *
+                                    "vector π must match maximum class index found in " *
+                                    "class index vector y (got $(m₃) and $(m))"))
+        end
+        validate_priors(priors)
+
+        Θ.π = copyto!(similar(priors, T), priors)
+    end
+
+    # Overall centroid is prior-weighted average of class centroids
+    Θ.μ = is_row ? vec(transpose(Θ.π)*Θ.M) : Θ.M*Θ.π
+
+    # Center the data matrix with respect to classes to compute whitening matrix
+    X .-= is_row ? view(Θ.M, y, :) : view(Θ.M, :, y)
+
+    return Θ
+end
+
+
+### Regularization
 
 """
     regularize!(Σ₁, Σ₂, λ)
