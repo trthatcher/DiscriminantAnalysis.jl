@@ -72,9 +72,24 @@ function fit!(LDA::LinearDiscriminantModel{T},
               priors::Union{Nothing,AbstractVector}=nothing,
               gamma::Union{Nothing,Real}=nothing) where T
     Θ = LDA.Θ
-    parameter_fit!(Θ, y, X, dims, false, centroids, priors, gamma)
 
-    df = size(X, dims) - size(Θ.M, dims)
+    set_dimensions!(Θ, y, X, dims)
+    set_gamma!(Θ, gamma)
+    set_statistics!(Θ, y, X, centroids)
+    set_priors!(Θ, priors)
+
+    if dims == 1
+        # Overall centroid is prior-weighted average of class centroids
+        Θ.μ = vec(transpose(Θ.π)*Θ.M)
+        # Center the data matrix with respect to classes to compute whitening matrix
+        X .-= view(Θ.M, y, :)
+    else
+        Θ.μ = Θ.M*Θ.π
+        X .-= view(Θ.M, :, y)
+    end
+
+    # Compute degress of freedom
+    df = size(X, dims) - Θ.m
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if Θ.γ === nothing

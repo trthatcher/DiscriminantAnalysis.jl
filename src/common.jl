@@ -34,7 +34,7 @@ end
 
 function validate_class_counts(nₘ::AbstractVector{T}) where {T <: Integer}
     for (k, nₖ) in enumerate(nₘ)
-        nₖ > 1 || error("class count at class index $(k) must be ")
+        nₖ > 1 || error("class count at class index $(k) must be greater than 1")
     end
 
     return length(nₘ)
@@ -110,8 +110,8 @@ Overwrites matrix `M` with class centroids from `X` based on class indexes from 
 function class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::AbstractMatrix, 
                            y::Vector{<:Integer}; dims::Integer=1)
     if dims == 1
-        n, p = check_dims(X, dims=2)
-        m, p₂ = check_dims(M, dims=2)
+        n, p = check_dims(X, dims=1)
+        m, p₂ = check_dims(M, dims=1)
         n₂ = length(y)
         m₂ = length(nₘ)
     
@@ -139,6 +139,10 @@ mutable struct DiscriminantParameters{T}
     fit::Bool
     "Dimension along which observations are stored (1 for rows, 2 for columns)"
     dims::Int
+    "Number of classes"
+    m::Int
+    "Number of predictors"
+    p::Int
     "Matrix of class centroids (one per row or column - see `dims`)"
     M::Matrix{T}
     "Prior-weighted overall centroid"
@@ -149,24 +153,20 @@ mutable struct DiscriminantParameters{T}
     nₘ::Vector{Int}
     "Shrinkage parameter"
     γ::Union{Nothing,T}
-    "Overall covariance matrix without `γ` regularization"
-    Σ::Union{Nothing,T}
+    "Overall covariance matrix after `γ` regularization"
+    Σ::Union{Nothing,Matrix{T}}
     "Determinant of the overall covariance matrix"
     detΣ::Union{Nothing,T}
     function DiscriminantParameters{T}() where T
-        new{T}(false, 0, Matrix{T}(undef,0,0), Vector{T}(undef,0), Vector{T}(undef,0),
+        new{T}(false, 0, 0, 0, Matrix{T}(undef,0,0), Vector{T}(undef,0), Vector{T}(undef,0),
                Vector{Int}(undef,0), nothing, nothing, zero(T))
     end
 end
 
-function parameter_fit!(Θ::DiscriminantParameters{T},
-                        y::Vector{<:Integer},
-                        X::Matrix{T},
-                        dims::Integer,
-                        compute_covariance::Bool,
-                        centroids::Union{Nothing,AbstractMatrix}, 
-                        priors::Union{Nothing,AbstractVector},
-                        gamma::Union{Nothing,Real}) where T
+function set_dimensions!(Θ::DiscriminantParameters{T},
+                         y::Vector{<:Integer},
+                         X::Matrix{T},
+                         dims::Integer) where {T}
     n, p = check_dims(X, dims=dims)
     m = maximum(y)
     
@@ -176,17 +176,32 @@ function parameter_fit!(Θ::DiscriminantParameters{T},
                                        "matrix X (got $(n₂) and $(n))"))
 
     Θ.dims = dims
-    is_row = dims == 1
-    altdims = is_row ? 2 : 1
+    Θ.m = m
+    Θ.p = p
 
-    if gamma !== nothing
-        0 ≤ gamma ≤ 1 || throw(DomainError(gamma, "γ must be in the interval [0,1]"))
+    return Θ
+end
+
+function set_gamma!(Θ::DiscriminantParameters{T}, γ::Union{Nothing,Real}) where T
+    if γ !== nothing
+        0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ must be in the interval [0,1]"))
     end
-    Θ.γ = gamma
+    Θ.γ = γ
+
+    return Θ
+end
+
+function set_statistics!(Θ::DiscriminantParameters{T},
+                         y::Vector{<:Integer},
+                         X::Matrix{T},
+                         centroids::Union{Nothing,AbstractMatrix}) where T
+    dims = Θ.dims
+    m = Θ.m
+    p = Θ.p
 
     # Compute centroids and class counts from data if not specified
     if centroids === nothing
-        Θ.M = is_row ? Matrix{T}(undef, m, p) : Matrix{T}(undef, p, m)
+        Θ.M = dims == 1 ? Matrix{T}(undef, m, p) : Matrix{T}(undef, p, m)
         Θ.nₘ = Vector{Int}(undef, m)
 
         class_statistics!(Θ.M, Θ.nₘ, X, y, dims=dims)
@@ -197,6 +212,7 @@ function parameter_fit!(Θ::DiscriminantParameters{T},
                                     "matrix M must match maximum class index found in " *
                                     "class index vector y (got $(m₂) and $(m))"))
         elseif p₂ != p
+            altdims = dims == 1 ? 2 : 1
             throw(DimensionMismatch("predictor count along dimension $(altdims) of " *
                                     "centroid matrix M must match dimension $(dims) of " *
                                     "data matrix X (got $(p₂) and $(p))"))
@@ -208,26 +224,27 @@ function parameter_fit!(Θ::DiscriminantParameters{T},
 
     validate_class_counts(Θ.nₘ)
 
+    return Θ
+end
+
+function set_priors!(Θ::DiscriminantParameters{T}, 
+                     π::Union{Nothing,AbstractVector}) where T
+    m = Θ.m
+
     # Compute priors from class frequencies in data if not specified
-    if priors === nothing
-        Θ.π = broadcast!(/, Vector{T}(undef, m), Θ.nₘ, n)
+    if π === nothing
+        Θ.π = broadcast!(/, Vector{T}(undef, m), Θ.nₘ, sum(Θ.nₘ))
     else
-        m₃ = length(priors)
-        if m₃ != m
+        m₂ = length(π)
+        if m₂ != m
             throw(DimensionMismatch("class count along length of class prior probability " *
                                     "vector π must match maximum class index found in " *
-                                    "class index vector y (got $(m₃) and $(m))"))
+                                    "class index vector y (got $(m₂) and $(m))"))
         end
-        validate_priors(priors)
+        validate_priors(π)
 
-        Θ.π = copyto!(similar(priors, T), priors)
+        Θ.π = copyto!(similar(π, T), π)
     end
-
-    # Overall centroid is prior-weighted average of class centroids
-    Θ.μ = is_row ? vec(transpose(Θ.π)*Θ.M) : Θ.M*Θ.π
-
-    # Center the data matrix with respect to classes to compute whitening matrix
-    X .-= is_row ? view(Θ.M, y, :) : view(Θ.M, :, y)
 
     return Θ
 end
