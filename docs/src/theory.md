@@ -66,17 +66,17 @@ There are several ways to compute a whitening transform given a covariance matri
 common methods are by the eigendecomposition or by the Cholesky decomposition, respectively:
 
 $$
-\Sigma = \mathbf{U} \Lambda \mathbf{U}^\intercal 
+\Sigma = \mathbf{V} \Lambda \mathbf{V}^\intercal 
 \quad\text{or}\quad 
 \Sigma = \mathbf{L}\mathbf{L}^\intercal
 $$
 
-where $\mathbf{U}$ is an orthogonal matrix, $\Lambda$ is a positive diagonal matrix and 
+where $\mathbf{V}$ is an orthogonal matrix, $\Lambda$ is a positive diagonal matrix and 
 $\mathbf{L}$ is a lower triangle matrix. This yields two approaches to the whitening 
 transform:
 
 $$
-\mathbf{W}^{\text{SVD}} = \Lambda^{-\frac{1}{2}}\mathbf{U}^\intercal
+\mathbf{W}^{\text{SVD}} = \Lambda^{-\frac{1}{2}}\mathbf{V}^\intercal
 \quad \text{and} \quad
 \mathbf{W}^{\text{Chol}} = \mathbf{L}^{-1}
 $$
@@ -117,51 +117,57 @@ $$
 ## Canonical Discriminant Analysis (CDA)
 
 Canonical discriminant analysis expands upon linear discriminant analysis by noting that 
-the class centroids lie in a $c-1$ dimensional subspace of the $p$ dimensions of the data 
-where $c$ is the number of classes. Defining the overall mean and the between-class 
+the class centroids lie in a $m-1$ dimensional subspace of the $p$ dimensions of the data 
+where $m$ is the number of classes. Defining the overall mean and the between-class 
 covariance matrix:
 
 $$
-\mu = \sum_{k=1}^c \pi_k \mu_k
+\mu = \sum_{k=1}^m \pi_k \mu_k
 \qquad \text{and} \qquad
-\Sigma_b = \frac{1}{c} \sum_{k=1}^{c} (\mu_k - \mu)(\mu_k - \mu)^{\intercal}
+\Sigma_b = \sum_{k=1}^{m} \pi_k (\mu_k - \mu)(\mu_k - \mu)^{\intercal}
 $$
 
-The goal of canonical discriminant analysis is to find the vector(s) that maximize the class
+The goal of canonical discriminant analysis is to find the vector that maximizes the class
 separation. This corresponds to maximizing the generalized Rayleigh quotient:
 
 $$
-\argmax_{\mathbf{w}} \frac{\mathbf{w}^{\intercal}\Sigma_b\mathbf{w}}{\mathbf{w}^{\intercal}\Sigma\mathbf{w}}
+\mathbf{c}^{\intercal} \mathbf{x}
+\quad \text{where} \quad
+\mathbf{c} = 
+\argmax_{\mathbf{u}} \frac{\mathbf{u}^{\intercal}\Sigma_b\mathbf{u}}{\mathbf{u}^{\intercal}\Sigma\mathbf{u}}
 $$
 
-where $\mathbf{w}$ is a non-zero vector. The problem can be extended to a multiclass case:
+where $\mathbf{c}$ is a unit vector. The problem can be extended to a multiclass case:
 
 $$
-\argmax_{\mathbf{W}} \frac{\left|\mathbf{W}^\intercal \Sigma_b \mathbf{W}\right|}{\left|\mathbf{W}^\intercal \Sigma \mathbf{W}\right|}
+\mathbf{C} \mathbf{x}
+\quad \text{where} \quad
+\mathbf{C}^{\intercal} =
+\argmax_{\mathbf{U}} \frac{\left|\mathbf{U}^\intercal \Sigma_b \mathbf{U}\right|}{\left|\mathbf{U}^\intercal \Sigma \mathbf{U}\right|}
 $$
 
 Solution:
 
 $$
-\Sigma_b \mathbf{V} = \Sigma \mathbf{V} \Lambda
+\Sigma_b \mathbf{C}^{\intercal} = \Sigma \mathbf{C}^{\intercal} \Lambda
 $$
 
 $$
-\Sigma_b \mathbf{V} = (\mathbf{W}^{\intercal}\mathbf{W})^{-1} \mathbf{V} \Lambda
+\Sigma_b \mathbf{C}^{\intercal} = (\mathbf{W}^{\intercal}\mathbf{W})^{-1} \mathbf{C}^{\intercal} \Lambda
 \quad \implies \quad
-\mathbf{W} \Sigma_b \mathbf{V} = \mathbf{W}^{-\intercal} \mathbf{V} \Lambda
+\mathbf{W} \Sigma_b \mathbf{C}^{\intercal} = \mathbf{W}^{-\intercal} \mathbf{C}^{\intercal} \Lambda
 $$
 
-Let $\mathbf{A} = \mathbf{W}^{-\intercal}\mathbf{V}$
+Let $\mathbf{V} = \mathbf{W}^{-\intercal}\mathbf{C}^{\intercal}$
 
 $$
-\mathbf{W} \Sigma_b \mathbf{W}^{\intercal} (\mathbf{W}^{-\intercal} \mathbf{V}) 
-= (\mathbf{W}^{-\intercal} \mathbf{V}) \Lambda
+\mathbf{W} \Sigma_b \mathbf{W}^{\intercal} (\mathbf{W}^{-\intercal} \mathbf{C}^{\intercal}) 
+= (\mathbf{W}^{-\intercal} \mathbf{C}^{\intercal}) \Lambda
 \quad \implies \quad
-\mathbf{W} \Sigma_b \mathbf{W}^{\intercal} \mathbf{A} = \mathbf{A} \Lambda
+\mathbf{W} \Sigma_b \mathbf{W}^{\intercal} \mathbf{V} = \mathbf{V} \Lambda
 $$
 
-
+Solve for $\mathbf{C} = \mathbf{V}^{\intercal}\mathbf{W}$.
 
 
 ## Implementation

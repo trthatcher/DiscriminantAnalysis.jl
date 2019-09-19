@@ -7,10 +7,8 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     W::Matrix{T}
     "Matrix of canonical coordinates"
     C::Union{Nothing,Matrix{T}}
-    "Matrix of canonical coordinates with whitening applied"
-    A::Union{Nothing,Matrix{T}}
     function LinearDiscriminantModel{T}() where T
-        new{T}(DiscriminantParameters{T}(), Matrix{T}(undef,0,0), nothing, nothing)
+        new{T}(DiscriminantParameters{T}(), Matrix{T}(undef,0,0), nothing)
     end
 end
 
@@ -23,7 +21,7 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
     if p ≤ m-1
         # no dimensionality reduction is possible
         LDA.C = Matrix{T}(I, p, p)
-        LDA.A = copy(LDA.W)
+        #LDA.A = copy(LDA.W)
     elseif Θ.dims == 1
         # center M by overall centroid
         M = broadcast!(-, similar(Θ.M, T), Θ.M, transpose(Θ.μ))
@@ -31,15 +29,13 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
         broadcast!((πₖ, Mₖⱼ) -> √(πₖ)Mₖⱼ, M, Θ.π, M)
         UDVᵀ = svd!(M*LDA.W, full=false)
 
-        LDA.C = copy(transpose(view(UDVᵀ.Vt, 1:m-1, :)))
-        LDA.A = LDA.W*LDA.C
+        LDA.C = LDA.W*transpose(view(UDVᵀ.Vt, 1:m-1, :))
     else
         M = broadcast!(-, similar(Θ.M, T), Θ.M, Θ.μ)
         broadcast!((πₖ, Mⱼₖ) -> √(πₖ)Mⱼₖ, M, transpose(Θ.π), M)
         UDVᵀ = svd!(LDA.W*M, full=false)
 
-        LDA.C = copy(transpose(view(UDVᵀ.U, :, 1:m-1)))
-        LDA.A = LDA.C*LDA.W
+        LDA.C = transpose(view(UDVᵀ.U, :, 1:m-1))*LDA.W
     end
 
     return LDA
@@ -103,7 +99,6 @@ function fit!(LDA::LinearDiscriminantModel{T},
         canonical_coordinates!(LDA)
     else
         LDA.C = nothing
-        LDA.A = nothing
     end
 
     Θ.fit = true

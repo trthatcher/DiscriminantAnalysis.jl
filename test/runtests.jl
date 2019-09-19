@@ -38,10 +38,10 @@ function random_cov(T::Type{<:AbstractFloat}, p::Integer)
     Q = qr(randn(T, p, p)).Q
     D = Diagonal(2p*rand(T, p))
 
-    Σ = Symmetric(Q*D*transpose(Q))
+    Σ = Symmetric(transpose(Q)*D*Q)
 
-    W_svd = Q*inv(√(D))
-    W_chol = inv(cholesky(Σ).U)
+    W_svd = inv(√(D))*Q
+    W_chol = copy(transpose(inv(cholesky(Σ).U)))
 
     return (Σ, W_svd, W_chol)
 end
