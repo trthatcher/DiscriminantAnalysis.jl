@@ -40,12 +40,8 @@
 
             if is_row
                 @test isapprox(abs.(lda_test.C), abs.(transpose(C_ref)))
-                #C_res = transpose(W_test)*lda_test.C
-                #@test isapprox(abs.(C_res), abs.(transpose(C_ref)))
             else
                 @test isapprox(abs.(lda_test.C), abs.(C_ref))
-                #C_res = lda_test.C*W_test
-                #@test isapprox(abs.(C_res), abs.(C_ref))
             end
         end
 
@@ -63,45 +59,60 @@
             DA.canonical_coordinates!(lda_test)
 
             @test isapprox(lda_test.C, Matrix{T}(I, m-1, m-1))
-            #@test isapprox(lda_test.A, ones(T, m-1, m-1))
         end
     end
 end
 
-#@testset "fit!(LDA)" begin
-#    nₘ = [400; 500; 600]
-#    p = 10
-#    n = sum(nₘ)
-#    m = length(nₘ)
-#
-#    for T in (Float32, Float64)
-#        X, y, M = random_data(T, nₘ, p)
-#        π = convert(Vector{T}, nₘ/m)
-#        scale = range(convert(T, 0.95), step=convert(T, 0.001), stop=convert(T, 1.1))
-#
-#        M_test_list = [nothing, rand(scale, p, m) .* M]
-#        π_test_list = [nothing, ones(T,m)/m]
-#        γ_test_list = [nothing, zero(T), convert(T, 0.5), one(T)]
-#
-#        LDM = DA.LinearDiscriminantModel{T}
-#
-#        for M_test in M_test_list, π_test in π_test_list, γ_test in γ_test_list
-#            Xc = X .- (M_test === nothing ? M[:, y] : M_test[:, y])
-#            Σ = (Xc*transpose(Xc)) ./ (n-m)
-#
-#            if !(γ_test === nothing)
-#                Σ = (1-γ_test)*Σ + γ_test*(tr(Σ)/p)*I
-#            end
-#
-#            lda_test = DA.fit!(LDM(), y, copy(X), 2, false, M_test, π_test, γ_test)
-#
-#            @test lda_test.Θ.fit == true
-#            @test lda_test.Θ.dims == 2
-#            @test isapprox(lda_test.Θ.M, M_test === nothing ? M : M_test)
-#            @test isapprox(lda_test.Θ.detΣ, det(Σ))
-#        end
-#    end
-#end
+@testset "fit!(LDA)" begin
+    nₘ = [400; 500; 600]
+    p = 10
+    n = sum(nₘ)
+    m = length(nₘ)
+
+    for T in (Float32, Float64)
+        X, y, M = random_data(T, nₘ, p)
+        π = convert(Vector{T}, nₘ/m)
+        Xt = copy(transpose(X))
+        Mt = copy(transpose(M))
+
+        π_tests = [nothing, ones(T,m)/m]
+        γ_tests = [nothing, range(zero(T), stop=one(T), length=5)...]
+
+        LDM = DA.LinearDiscriminantModel{T}
+
+        for (dims, M_input) in [(1,nothing), (1,perturb(Mt)), (2,nothing), (2,perturb(M))]
+            if dims == 1
+                X_test = copy(Xt)
+                M_test = M_input === nothing ? copy(Mt) : M_input
+
+                Xc = X_test .- M_test[y, :]
+                Σ = (transpose(Xc)*Xc) ./ (n-m)
+            else
+                X_test = copy(X)
+                M_test = M_input === nothing ? copy(M) : M_input
+
+                Xc = X_test .- M_test[:, y]
+                Σ = (Xc*transpose(Xc)) ./ (n-m)
+            end
+
+            for π_test in π_tests, γ_test in γ_tests
+                if !(γ_test === nothing)
+                    Σ_test = (1-γ_test)*Σ + γ_test*(tr(Σ)/p)*I
+                else
+                    Σ_test = copy(Σ)
+                end
+
+                lda_test = DA.fit!(LDM(), y, copy(X_test), dims, false, M_input, π_test, γ_test)
+    
+                #@test lda_test.Θ.fit == true
+                #@test lda_test.Θ.dims == dims
+                #@test isapprox(lda_test.Θ.M, M_test)
+                @test isapprox(lda_test.Θ.Σ, Σ_test)
+                @test isapprox(lda_test.Θ.detΣ, det(Σ_test))
+            end
+        end
+    end
+end
 # eigen(Σ_between, Σ_within).vectors
 #W_svd*transpose(svd((.√(πₖ) .* Mc)*W_svd).Vt)
 #W_chol*transpose(svd((.√(πₖ) .* Mc)*W_chol).Vt)

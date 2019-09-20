@@ -21,7 +21,6 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
     if p ≤ m-1
         # no dimensionality reduction is possible
         LDA.C = Matrix{T}(I, p, p)
-        #LDA.A = copy(LDA.W)
     elseif Θ.dims == 1
         # center M by overall centroid
         M = broadcast!(-, similar(Θ.M, T), Θ.M, transpose(Θ.μ))
@@ -74,23 +73,26 @@ function fit!(LDA::LinearDiscriminantModel{T},
     set_statistics!(Θ, y, X, centroids)
     set_priors!(Θ, priors)
 
+    # Compute degress of freedom
+    df = size(X, dims) - Θ.m
+
     if dims == 1
         # Overall centroid is prior-weighted average of class centroids
         Θ.μ = vec(transpose(Θ.π)*Θ.M)
         # Center the data matrix with respect to classes to compute whitening matrix
         X .-= view(Θ.M, y, :)
+        Θ.Σ = X'X/df
     else
         Θ.μ = Θ.M*Θ.π
         X .-= view(Θ.M, :, y)
+        Θ.Σ = X*transpose(X)/df
     end
-
-    # Compute degress of freedom
-    df = size(X, dims) - Θ.m
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if Θ.γ === nothing
         LDA.W, Θ.detΣ = whiten_data!(X, dims=dims, df=df)
     else
+        Θ.Σ = (1-Θ.γ)*Θ.Σ + Θ.γ*(tr(Θ.Σ)/Θ.p)*I
         LDA.W, Θ.detΣ = whiten_data!(X, Θ.γ, dims=dims, df=df)
     end
 
