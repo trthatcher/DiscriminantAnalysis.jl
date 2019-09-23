@@ -1,4 +1,4 @@
-@info "Testing lda.jl"
+@info "Testing linear.jl"
 
 @testset "canonical_coordinates!(LDA)" begin
     p = 10

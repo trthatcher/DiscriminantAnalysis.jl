@@ -1,8 +1,9 @@
 module DiscriminantAnalysis
     using StatsBase, LinearAlgebra
 
-    abstract type DiscriminantModel{T<:AbstractFloat} <: StatsBase.StatisticalModel end
-
     include("common.jl")
-    include("lda.jl")
+    include("whiten.jl")
+    include("discriminant.jl")
+    include("linear.jl")
+    #include("quadratic.jl")
 end

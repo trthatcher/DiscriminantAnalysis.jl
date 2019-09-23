@@ -54,5 +54,7 @@ end
 
 @testset "DiscriminantAnalysis.jl" begin
     include("test_common.jl")
-    include("test_lda.jl")
+    include("test_whiten.jl")
+    include("test_discriminant.jl")
+    include("test_linear.jl")
 end
