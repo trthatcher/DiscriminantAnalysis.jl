@@ -69,17 +69,14 @@ Backend for `class_statistics!` - assumes `dims=2`.
 """
 function _class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::AbstractMatrix, 
                             y::Vector{<:Integer})
-    n, p = check_dims(X, dims=2)
-    m, p₂ = check_dims(M, dims=2)
+    p, n = size(X)
+    p₂, m = size(M)
     n₂ = length(y)
     m₂ = length(nₘ)
 
-    p == p₂ || throw(DimensionMismatch("predictor count along dimension 1 of X must " *
-                                       "match dimension 1 of M (got $(p) and $(p₂))"))
-    n == n₂ || throw(DimensionMismatch("observation count along length of y must match " *
-                                       "dimension 2 of X (got $(n) and $(n₂))"))
-    m == m₂ || throw(DimensionMismatch("class count along length of nₘ must match " *
-                                       "dimension 1 of M (got $(m₂) and $(m))"))
+    p == p₂ || throw(DimensionMismatch("predictor count mismatch between M and X"))
+    n == n₂ || throw(DimensionMismatch("observation count mismatch between y and X"))
+    m == m₂ || throw(DimensionMismatch("class count mismatch between nₘ and M"))
 
     T = eltype(nₘ)
 
@@ -109,25 +106,26 @@ Overwrites matrix `M` with class centroids from `X` based on class indexes from 
 """
 function class_statistics!(M::AbstractMatrix, nₘ::Vector{<:Integer}, X::AbstractMatrix, 
                            y::Vector{<:Integer}; dims::Integer=1)
-    if dims == 1
-        n, p = check_dims(X, dims=1)
-        m, p₂ = check_dims(M, dims=1)
-        n₂ = length(y)
-        m₂ = length(nₘ)
-    
-        p == p₂ || throw(DimensionMismatch("predictor count along dimension 2 of X must " *
-                                           "match dimension 2 of M (got $(p) and $(p₂))"))
-        n == n₂ || throw(DimensionMismatch("observation count along length of y must " *
-                                           "match dimension 1 of X (got $(n) and $(n₂))"))
-        m == m₂ || throw(DimensionMismatch("class count along length of nₘ must match " *
-                                           "dimension 2 of M (got $(m₂) and $(m))"))
+    n, p = check_dims(X, dims=dims)
+    m, p₂ = check_dims(M, dims=dims)
+    n₂ = length(y)
+    m₂ = length(nₘ)
 
+    altdims = dims == 1 ? 2 : 1
+    
+    p == p₂ || throw(DimensionMismatch("predictor count along dimension $(altdims) of X " *
+                                       "must match dimension $(altdims) of M (got $(p) " * 
+                                       "and $(p₂))"))
+    n == n₂ || throw(DimensionMismatch("observation count along length of y must match " *
+                                       "dimension $(dims) of X (got $(n) and $(n₂))"))
+    m == m₂ || throw(DimensionMismatch("class count along length of nₘ must match " *
+                                       "dimension $(dims) of M (got $(m₂) and $(m))"))
+
+    if dims == 1
         _class_statistics!(transpose(M), nₘ, transpose(X), y)
         return (M, nₘ)
-    elseif dims ==2
+    else dims == 2
         return _class_statistics!(M, nₘ, X, y)
-    else
-        throw(ArgumentError("dims should be 1 or 2 (got $dims)"))
     end
 end
 
