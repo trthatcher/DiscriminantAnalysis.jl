@@ -42,7 +42,7 @@ end
 
 
 """
-    fit!(LDA::LinearDiscriminantModel, Y::Matrix, X::Matrix; dims::Integer=1, <keyword arguments>...)
+    fit!(LDA::LinearDiscriminantModel, Y::Matrix, X::Matrix; dims::Integer=1, kwargs...)
 
 Fit a linear discriminant model based on data matrix `X` and class indicator matrix `Y` 
 along dimensions `dims` and overwrite `LDA`.
@@ -60,14 +60,15 @@ matrix towards the identity matrix scaled by the average eigenvalue of the covar
 """
 function fit!(LDA::LinearDiscriminantModel{T},
               y::Vector{<:Integer},
-              X::Matrix{T},
+              X::Matrix{T};
               dims::Integer=1,
               canonical::Bool=false,
+              compute_covariance::Bool=false,
               centroids::Union{Nothing,AbstractMatrix}=nothing, 
               priors::Union{Nothing,AbstractVector}=nothing,
               gamma::Union{Nothing,Real}=nothing) where T
     Θ = LDA.Θ
-
+    
     set_dimensions!(Θ, y, X, dims)
     set_gamma!(Θ, gamma)
     set_statistics!(Θ, y, X, centroids)
@@ -81,18 +82,26 @@ function fit!(LDA::LinearDiscriminantModel{T},
         Θ.μ = vec(transpose(Θ.π)*Θ.M)
         # Center the data matrix with respect to classes to compute whitening matrix
         X .-= view(Θ.M, y, :)
-        Θ.Σ = X'X/df
+        # Compute covariance matrix if requested
+        if compute_covariance
+            Θ.Σ = lmul!(one(T)/df, transpose(X)*X)
+        end
     else
         Θ.μ = Θ.M*Θ.π
         X .-= view(Θ.M, :, y)
-        Θ.Σ = X*transpose(X)/df
+        if compute_covariance
+            Θ.Σ = lmul!(one(T)/df, X*transpose(X))
+        end
     end
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if Θ.γ === nothing
         LDA.W, Θ.detΣ = whiten_data!(X, dims=dims, df=df)
     else
-        Θ.Σ = (1-Θ.γ)*Θ.Σ + Θ.γ*(tr(Θ.Σ)/Θ.p)*I
+        if !(Θ.Σ === nothing)
+            # Σ = (1-γ)Σ + γ(tr(Σ)/p)I
+            regularize!(Θ.Σ, gamma)
+        end
         LDA.W, Θ.detΣ = whiten_data!(X, Θ.γ, dims=dims, df=df)
     end
 
@@ -109,8 +118,9 @@ function fit!(LDA::LinearDiscriminantModel{T},
 end
 
 
-function discriminants!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matrix{T}; 
-                        dims::Integer=1) where T
+function discriminants!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
+    dims = LDA.Θ.dims
+
     n, p = check_dims(X, dims=dims)
     m, p₂ = check_dims(LDA.M, dims=dims)
     n₂, m₂ = check_dims(Δ)
@@ -128,23 +138,23 @@ function discriminants!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matri
                                        "and $(m₂))"))
 
     M = LDA.M
-    W = LDA.W
+    A = LDA.C === nothing ? LDA.C : LDA.W
 
     if dims == 1
-        XW = X*W
-        MW = M*W
-        Z = similar(XW)
+        XA = X*A
+        MA = M*A
+        Z = similar(XA)
         for k = 1:m
-            broadcast!(-, Z, XW, MW[k, :])
-            sum!(abs2, Δ[:, k], Z)
+            broadcast!(-, Z, XA, view(MA, k, :))
+            sum!(abs2, view(Δ, :, k), Z)
         end
     else
-        WX = W*X
-        WM = W*M
-        Z = similar(XW)
+        AX = A*X
+        AM = A*M
+        Z = similar(AX)
         for k = 1:m
-            broadcast!(-, Z, WX, WM[:, k])
-            sum!(abs2, Δ[k, :], Z)
+            broadcast!(-, Z, AX, view(AM, :, k))
+            sum!(abs2, view(Δ, k, :), Z)
         end
     end
 

@@ -76,7 +76,7 @@ end
         Mt = copy(transpose(M))
 
         π_tests = [nothing, ones(T,m)/m]
-        γ_tests = [nothing, range(zero(T), stop=one(T), length=5)...]
+        γ_tests = [nothing, range(zero(T), stop=one(T), length=3)...]
 
         LDM = DA.LinearDiscriminantModel{T}
 
@@ -102,11 +102,14 @@ end
                     Σ_test = copy(Σ)
                 end
 
-                lda_test = DA.fit!(LDM(), y, copy(X_test), dims, false, M_input, π_test, γ_test)
+                lda_test = DA.fit!(LDM(), y, copy(X_test), dims=dims, canonical=false, 
+                                   compute_covariance=true, centroids=M_input, 
+                                   priors=π_test, gamma=γ_test)
     
-                #@test lda_test.Θ.fit == true
-                #@test lda_test.Θ.dims == dims
-                #@test isapprox(lda_test.Θ.M, M_test)
+                @test lda_test.Θ.fit == true
+                @test lda_test.Θ.dims == dims
+                @test lda_test.Θ.γ == γ_test
+                @test isapprox(lda_test.Θ.M, M_test)
                 @test isapprox(lda_test.Θ.Σ, Σ_test)
                 @test isapprox(lda_test.Θ.detΣ, det(Σ_test))
             end
