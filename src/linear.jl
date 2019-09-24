@@ -7,8 +7,10 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     W::Matrix{T}
     "Matrix of canonical coordinates"
     C::Union{Nothing,Matrix{T}}
+    "Discriminant function intercept"
+    δ::T
     function LinearDiscriminantModel{T}() where T
-        new{T}(DiscriminantParameters{T}(), Matrix{T}(undef,0,0), nothing)
+        new{T}(DiscriminantParameters{T}(), Matrix{T}(undef,0,0), nothing, zero(T))
     end
 end
 
@@ -96,13 +98,9 @@ function fit!(LDA::LinearDiscriminantModel{T},
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if Θ.γ === nothing
-        LDA.W, Θ.detΣ = whiten_data!(X, dims=dims, df=df)
+        LDA.W, LDA.δ = whiten_data!(X, dims=dims, df=df)
     else
-        if !(Θ.Σ === nothing)
-            # Σ = (1-γ)Σ + γ(tr(Σ)/p)I
-            regularize!(Θ.Σ, gamma)
-        end
-        LDA.W, Θ.detΣ = whiten_data!(X, Θ.γ, dims=dims, df=df)
+        LDA.W, LDA.δ = whiten_data!(X, Θ.γ, dims=dims, df=df)
     end
 
     # Perform canonical discriminant analysis if applicable

@@ -23,13 +23,11 @@ mutable struct DiscriminantParameters{T}
     nₘ::Vector{Int}
     "Shrinkage parameter"
     γ::Union{Nothing,T}
-    "Overall covariance matrix after `γ` regularization"
+    "Overall covariance matrix without `γ` regularization"
     Σ::Union{Nothing,Matrix{T}}
-    "Determinant of the overall covariance matrix"
-    detΣ::Union{Nothing,T}
     function DiscriminantParameters{T}() where T
         new{T}(false, 0, 0, 0, Matrix{T}(undef,0,0), Vector{T}(undef,0), Vector{T}(undef,0),
-               Vector{Int}(undef,0), nothing, nothing, zero(T))
+               Vector{Int}(undef,0), nothing, nothing)
     end
 end
 

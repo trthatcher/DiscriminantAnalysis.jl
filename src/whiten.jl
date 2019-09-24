@@ -49,7 +49,8 @@ end
 @inline regularize(x, y, γ) = (1-γ)*x + γ*y
 
 
-function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, df::Integer=size(X,dims)-1) where T
+function whiten_data!(X::Matrix{T}, γ::Union{Nothing,T}; dims::Integer, 
+                      df::Integer=size(X,dims)-1) where T
     n, p = check_dims(X, dims=dims)
     
     n > p || error("insufficient number of within-class observations to produce a full " *
@@ -63,7 +64,7 @@ function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, df::Integer=size(X,dim
 
     D = UDVᵀ.S
 
-    if γ ≠ zero(T)
+    if γ !== nothing && γ ≠ zero(T)
         # Regularize: Σ = VD²Vᵀ ⟹ Σ(γ) = V((1-γ)D² + (γ/p)trace(D²)I)Vᵀ
         broadcast!(σᵢ -> abs2(σᵢ)/df, D, D)  # Convert data singular values to Σ eigenvalues
         broadcast!(regularize, D, D, mean(D), γ)
@@ -89,14 +90,27 @@ function whiten_data!(X::Matrix{T}, γ::T; dims::Integer, df::Integer=size(X,dim
 end
 
 
-function whiten_cov!(Σ::AbstractMatrix{T}, γ::T=zero(T)) where T
+function whiten_cov!(Σ::AbstractMatrix{T}, γ::Union{Nothing,T}=zero(T); 
+                     dims::Integer=1) where T
     (p = size(Σ, 1)) == size(Σ, 2) || throw(DimensionMismatch("Σ must be square"))
 
     0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ must be in the interval [0,1]"))
     
-    if γ != 0
+    if γ !== nothing && γ ≠ zero(T)
         regularize!(Σ, γ)
     end
+
+    UᵀU = cholesky!(Σ, Val(false); check=true)
     
-    W = inv(cholesky!(Σ, Val(false); check=true).U)
+    if dims == 1
+        U = UᵀU.U
+        detΣ = det(U)^2
+
+        return (inv(U), detΣ)
+    else
+        Uᵀ = UᵀU.L
+        detΣ = det(Uᵀ)^2
+
+        return (inv(Uᵀ), detΣ)
+    end 
 end

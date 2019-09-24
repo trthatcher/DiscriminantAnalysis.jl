@@ -110,8 +110,8 @@ end
                 @test lda_test.Θ.dims == dims
                 @test lda_test.Θ.γ == γ_test
                 @test isapprox(lda_test.Θ.M, M_test)
-                @test isapprox(lda_test.Θ.Σ, Σ_test)
-                @test isapprox(lda_test.Θ.detΣ, det(Σ_test))
+                @test isapprox(lda_test.Θ.Σ, Σ)
+                @test isapprox(lda_test.δ, det(Σ_test))
             end
         end
     end
