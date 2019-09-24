@@ -8,7 +8,7 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     "Matrix of canonical coordinates"
     C::Union{Nothing,Matrix{T}}
     "Discriminant function intercept"
-    δ::T
+    δ₀::T
     function LinearDiscriminantModel{T}() where T
         new{T}(DiscriminantParameters{T}(), Matrix{T}(undef,0,0), nothing, zero(T))
     end
@@ -52,6 +52,7 @@ along dimensions `dims` and overwrite `LDA`.
 # Keyword arguments
 - `canonical::Bool=false`: computes canonical coordinates and performs dimensionality
 reduction if `true`
+- `compute_covariance`: if true, computes `Σ`
 - `centroids::Matrix`: specifies the class centroids. If `dims` is `1`, then each row 
 represents a class centroid, otherwise each column represents a class centroid. If not 
 specified, the centroids are computed from the data.
@@ -98,9 +99,9 @@ function fit!(LDA::LinearDiscriminantModel{T},
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if Θ.γ === nothing
-        LDA.W, LDA.δ = whiten_data!(X, dims=dims, df=df)
+        LDA.W, LDA.δ₀ = whiten_data!(X, dims=dims, df=df)
     else
-        LDA.W, LDA.δ = whiten_data!(X, Θ.γ, dims=dims, df=df)
+        LDA.W, LDA.δ₀ = whiten_data!(X, Θ.γ, dims=dims, df=df)
     end
 
     # Perform canonical discriminant analysis if applicable
@@ -119,9 +120,11 @@ end
 function discriminants!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
     dims = LDA.Θ.dims
 
+    M = LDA.Θ.M
+
     n, p = check_dims(X, dims=dims)
-    m, p₂ = check_dims(LDA.M, dims=dims)
-    n₂, m₂ = check_dims(Δ)
+    m, p₂ = check_dims(M, dims=dims)
+    n₂, m₂ = check_dims(Δ, dims=dims)
 
     alt_dims = dims == 1 ? 2 : 1
 
@@ -135,26 +138,57 @@ function discriminants!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matri
                                        "must match dimension $(dims) of M (got $(m) " *
                                        "and $(m₂))"))
 
-    M = LDA.M
-    A = LDA.C === nothing ? LDA.C : LDA.W
+    is_row = dims == 1
 
-    if dims == 1
-        XA = X*A
-        MA = M*A
-        Z = similar(XA)
-        for k = 1:m
-            broadcast!(-, Z, XA, view(MA, k, :))
-            sum!(abs2, view(Δ, :, k), Z)
+    π = LDA.Θ.π
+    W = LDA.C === nothing ? LDA.W : LDA.C
+
+    X̃, M̃ = is_row ? (X*W, M*W) : (W*X, W*M)
+
+    Z = similar(X̃)
+    for k = 1:m
+        if is_row
+            Δₖ = view(Δ, :, k:k)
+            μₖ = view(M̃, k:k, :)
+        else
+            Δₖ = view(Δ, k:k, :)
+            μₖ = view(M̃, :, k:k)
         end
-    else
-        AX = A*X
-        AM = A*M
-        Z = similar(AX)
-        for k = 1:m
-            broadcast!(-, Z, AX, view(AM, :, k))
-            sum!(abs2, view(Δ, k, :), Z)
-        end
+
+        broadcast!(-, Z, X̃, μₖ)
+        sum!(abs2, Δₖ, Z)
+        broadcast!((d², logπ) -> logπ - d²/2, Δₖ, Δₖ, log(π[k]))
     end
 
     return Δ
+end
+
+
+function discriminants(LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
+    dims = LDA.Θ.dims
+    n = size(X, dims)
+    m = LDA.Θ.m
+
+    Δ = dims == 1 ? Matrix{T}(undef, n, m) : Matrix{T}(undef, m, n)
+
+    return discriminants!(Δ, LDA, X)
+end
+
+
+function _posteriors!(Δ::Matrix{T}, LDA::LinearDiscriminantModel{T}) where T
+    Π = broadcast!(exp, Δ, Δ)
+    alt_dims = LDA.Θ.dims == 1 ? 2 : 1
+    return broadcast!(/, Π, Π, sum(Π, dims=alt_dims))
+end
+
+
+function posteriors!(Π::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
+    Δ = discriminants!(Π, LDA, X)
+    return _posteriors!(Δ, LDA)
+end
+
+
+function posteriors!(LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
+    Δ = discriminants(LDA, X)
+    return _posteriors!(Δ, LDA)
 end

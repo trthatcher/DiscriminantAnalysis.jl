@@ -107,7 +107,7 @@ end
                     @test lda_test.Θ.dims == 1
                     @test lda_test.Θ.γ == γ
                     @test isapprox(lda_test.Θ.M, Mt_test)
-                    @test isapprox(lda_test.δ, det(Σ_test))
+                    @test isapprox(lda_test.δ₀, det(Σ_test))
                     if compute_cov
                         @test isapprox(lda_test.Θ.Σ, Σ)
                     else
@@ -127,7 +127,7 @@ end
                     @test lda_test.Θ.dims == 2
                     @test lda_test.Θ.γ == γ
                     @test isapprox(lda_test.Θ.M, M_test)
-                    @test isapprox(lda_test.δ, det(Σ_test))
+                    @test isapprox(lda_test.δ₀, det(Σ_test))
                     if compute_cov
                         @test isapprox(lda_test.Θ.Σ, Σ)
                     else
