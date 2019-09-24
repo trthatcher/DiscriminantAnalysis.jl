@@ -77,45 +77,69 @@ end
 
         π_tests = [nothing, ones(T,m)/m]
         γ_tests = [nothing, range(zero(T), stop=one(T), length=3)...]
+        tf_tests = [true, false]
 
         LDM = DA.LinearDiscriminantModel{T}
 
-        for (dims, M_input) in [(1,nothing), (1,perturb(Mt)), (2,nothing), (2,perturb(M))]
-            if dims == 1
-                X_test = copy(Xt)
-                M_test = M_input === nothing ? copy(Mt) : M_input
+        for M_input in [nothing, perturb(M)]
+            X_test = copy(X)
+            M_test = M_input === nothing ? M : M_input
+            Xc = X_test .- M_test[:, y]
+            Σ = (Xc*transpose(Xc)) ./ (n-m)
 
-                Xc = X_test .- M_test[y, :]
-                Σ = (transpose(Xc)*Xc) ./ (n-m)
-            else
-                X_test = copy(X)
-                M_test = M_input === nothing ? copy(M) : M_input
+            Xt_test = copy(transpose(X_test))
+            Mt_test = copy(transpose(M_test))
+            Mt_input = M_input === nothing ? nothing : copy(transpose(M_input))
 
-                Xc = X_test .- M_test[:, y]
-                Σ = (Xc*transpose(Xc)) ./ (n-m)
-            end
-
-            for π_test in π_tests, γ_test in γ_tests
-                if !(γ_test === nothing)
-                    Σ_test = (1-γ_test)*Σ + γ_test*(tr(Σ)/p)*I
+            for γ in γ_tests 
+                if γ !== nothing
+                    Σ_test = (1-γ)*Σ + γ*(tr(Σ)/p)*I
                 else
                     Σ_test = copy(Σ)
                 end
+                
+                for π_test in π_tests, compute_cov in tf_tests, canonical in tf_tests
+                    lda_test = DA.fit!(LDM(), y, copy(Xt_test), dims=1, canonical=canonical, 
+                                       compute_covariance=compute_cov, centroids=Mt_input, 
+                                       priors=π_test, gamma=γ)
+        
+                    @test lda_test.Θ.fit == true
+                    @test lda_test.Θ.dims == 1
+                    @test lda_test.Θ.γ == γ
+                    @test isapprox(lda_test.Θ.M, Mt_test)
+                    @test isapprox(lda_test.δ, det(Σ_test))
+                    if compute_cov
+                        @test isapprox(lda_test.Θ.Σ, Σ)
+                    else
+                        @test lda_test.Θ.Σ === nothing
+                    end
+                    if canonical
+                        @test size(lda_test.C) == (p, min(m-1,p))
+                    else
+                        @test lda_test.C === nothing
+                    end
 
-                lda_test = DA.fit!(LDM(), y, copy(X_test), dims=dims, canonical=false, 
-                                   compute_covariance=true, centroids=M_input, 
-                                   priors=π_test, gamma=γ_test)
-    
-                @test lda_test.Θ.fit == true
-                @test lda_test.Θ.dims == dims
-                @test lda_test.Θ.γ == γ_test
-                @test isapprox(lda_test.Θ.M, M_test)
-                @test isapprox(lda_test.Θ.Σ, Σ)
-                @test isapprox(lda_test.δ, det(Σ_test))
+                    lda_test = DA.fit!(LDM(), y, copy(X_test), dims=2, canonical=canonical, 
+                                       compute_covariance=compute_cov, centroids=M_input, 
+                                       priors=π_test, gamma=γ)
+        
+                    @test lda_test.Θ.fit == true
+                    @test lda_test.Θ.dims == 2
+                    @test lda_test.Θ.γ == γ
+                    @test isapprox(lda_test.Θ.M, M_test)
+                    @test isapprox(lda_test.δ, det(Σ_test))
+                    if compute_cov
+                        @test isapprox(lda_test.Θ.Σ, Σ)
+                    else
+                        @test lda_test.Θ.Σ === nothing
+                    end
+                    if canonical
+                        @test size(lda_test.C) == (min(m-1,p), p)
+                    else
+                        @test lda_test.C === nothing
+                    end
+                end
             end
         end
     end
 end
-# eigen(Σ_between, Σ_within).vectors
-#W_svd*transpose(svd((.√(πₖ) .* Mc)*W_svd).Vt)
-#W_chol*transpose(svd((.√(πₖ) .* Mc)*W_chol).Vt)
