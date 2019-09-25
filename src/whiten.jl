@@ -17,18 +17,18 @@ function whiten_data!(X::Matrix{T}; dims::Integer, df::Integer=size(X,dims)-1) w
 
     if dims == 1
         # X = QR ⟹ S = XᵀX = RᵀR
-        R = UpperTriangular(qr!(X, Val(false)).R)  
+        W⁻¹ = UpperTriangular(qr!(X, Val(false)).R)  
     else
         # Xᵀ = LQ ⟹ S = XXᵀ = LLᵀ = RᵀR
-        R = UpperTriangular(transpose(lq!(X).L))  
+        W⁻¹ = LowerTriangular(lq!(X).L)
     end
 
-    broadcast!(/, R, R, √(df))
+    broadcast!(/, W⁻¹, W⁻¹, √(df))
 
-    detΣ = det(R)^2
+    detΣ = det(W⁻¹)^2
 
     W = try
-        inv(R)
+        inv(W⁻¹)
     catch err
         if isa(err, LAPACKException) || isa(err, SingularException)
             if err.info ≥ 1
@@ -38,11 +38,7 @@ function whiten_data!(X::Matrix{T}; dims::Integer, df::Integer=size(X,dims)-1) w
         throw(err)
     end
 
-    if dims == 1
-        return (W, detΣ)
-    else
-        return (copy(transpose(W)), detΣ)
-    end
+    return (W, detΣ)
 end
 
 
