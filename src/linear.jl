@@ -4,9 +4,9 @@ mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
     "Model fit indicator - `true` if model has been fit"
     Θ::DiscriminantParameters{T}
     "Whitening transformation"
-    W::Matrix{T}
+    W::AbstractMatrix{T}
     "Matrix of canonical coordinates"
-    C::Union{Nothing,Matrix{T}}
+    C::Union{Nothing,AbstractMatrix{T}}
     "Discriminant function intercept"
     δ₀::T
     function LinearDiscriminantModel{T}() where T
@@ -29,7 +29,7 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
         # Σ_between = Mᵀdiag(π)M so need to scale by sqrt π
         broadcast!((πₖ, Mₖⱼ) -> √(πₖ)Mₖⱼ, M, Θ.π, M)
         UDVᵀ = svd!(M*LDA.W, full=false)
-
+        # Extract m-1 components 
         LDA.C = LDA.W*transpose(view(UDVᵀ.Vt, 1:m-1, :))
     else
         M = broadcast!(-, similar(Θ.M, T), Θ.M, Θ.μ)

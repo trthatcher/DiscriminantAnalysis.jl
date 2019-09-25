@@ -92,25 +92,26 @@ end
 
 function whiten_cov!(Σ::AbstractMatrix{T}, γ::Union{Nothing,T}=zero(T); 
                      dims::Integer=1) where T
-    (p = size(Σ, 1)) == size(Σ, 2) || throw(DimensionMismatch("Σ must be square"))
+    p, p₂ = check_dims(Σ, dims=dims)
 
-    0 ≤ γ ≤ 1 || throw(DomainError(γ, "γ must be in the interval [0,1]"))
-    
+    p == p₂ || throw(DimensionMismatch("Σ must be square"))
+
     if γ !== nothing && γ ≠ zero(T)
+        zero(T) ≤ γ ≤ one(T) || throw(DomainError(γ, "γ must be in the interval [0,1]"))
         regularize!(Σ, γ)
     end
 
     UᵀU = cholesky!(Σ, Val(false); check=true)
     
     if dims == 1
-        U = UᵀU.U
-        detΣ = det(U)^2
+        Lᵀ = UᵀU.U
+        detΣ = det(Lᵀ)^2
 
-        return (inv(U), detΣ)
+        return (inv(Lᵀ), detΣ)
     else
-        Uᵀ = UᵀU.L
-        detΣ = det(Uᵀ)^2
+        L = UᵀU.L
+        detΣ = det(L)^2
 
-        return (inv(Uᵀ), detΣ)
+        return (inv(L), detΣ)
     end 
 end
