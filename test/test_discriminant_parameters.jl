@@ -1,4 +1,4 @@
-@info "Testing discriminant.jl"
+@info "Testing discriminant_parameters.jl"
 
 ### Model Parameters
 

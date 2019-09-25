@@ -1,7 +1,3 @@
-### Base Type
-
-abstract type DiscriminantModel{T<:AbstractFloat} <: StatsBase.StatisticalModel end
-
 ### Model Parameters
 
 mutable struct DiscriminantParameters{T}
