@@ -99,9 +99,9 @@ function fit!(LDA::LinearDiscriminantModel{T},
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
     if Θ.γ === nothing
-        LDA.W, LDA.δ₀ = whiten_data!(X, dims=dims, df=df)
+        LDA.W, LDA.δ₀ = whiten_data_chol!(X, dims=dims, df=df)
     else
-        LDA.W, LDA.δ₀ = whiten_data!(X, Θ.γ, dims=dims, df=df)
+        LDA.W, LDA.δ₀ = whiten_data_svd!(X, Θ.γ, dims=dims, df=df)
     end
 
     # Perform canonical discriminant analysis if applicable
