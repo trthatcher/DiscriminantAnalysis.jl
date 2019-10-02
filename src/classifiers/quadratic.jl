@@ -1,3 +1,23 @@
+# Quadratic Discriminant Analysis
+
+mutable struct QuadraticDiscriminantModel{T} <: DiscriminantModel{T}
+    "Standard discriminant model parameters"
+    Θ::DiscriminantParameters{T}
+    "Shrinkage parameter towards the common covariance matrix"
+    λ::Union{Nothing,T}
+    "Whitening transformation by class"
+    Wₘ::AbstractArray{T,3}
+    "Discriminant function intercept for each class"
+    δ₀::Vector{T}
+    function QuadraticDiscriminantModel{T}() where T
+        new{T}(DiscriminantParameters{T}(), nothing, Array{T}(undef,0,0,0), 
+               Vector{T}(undef,0))
+    end
+end
+
+
+
+
 #==========================================================================
   Regularized Quadratic Discriminant Analysis Solver
 ==========================================================================#

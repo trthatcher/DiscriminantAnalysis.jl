@@ -1,11 +1,11 @@
 # Linear Discriminant Analysis
 
 mutable struct LinearDiscriminantModel{T} <: DiscriminantModel{T}
-    "Model fit indicator - `true` if model has been fit"
+    "Standard discriminant model parameters"
     Θ::DiscriminantParameters{T}
     "Whitening transformation"
     W::AbstractMatrix{T}
-    "Matrix of canonical coordinates"
+    "Canonical coordinate projection matrix with whitening"
     C::Union{Nothing,AbstractMatrix{T}}
     "Discriminant function intercept"
     δ₀::T
@@ -98,7 +98,9 @@ function fit!(LDA::LinearDiscriminantModel{T},
     end
 
     # Use cholesky whitening if gamma is not specifed, otherwise svd whitening
-    if Θ.γ === nothing
+    if Θ.Σ !== nothing
+        LDA.W, LDA.δ₀ = whiten_cov_chol!(copy(Θ.Σ), Θ.γ, dims=dims)
+    elseif Θ.γ === nothing
         LDA.W, LDA.δ₀ = whiten_data_chol!(X, dims=dims, df=df)
     else
         LDA.W, LDA.δ₀ = whiten_data_svd!(X, Θ.γ, dims=dims, df=df)

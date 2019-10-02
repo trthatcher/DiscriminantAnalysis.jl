@@ -86,7 +86,7 @@ function whiten_data_svd!(X::Matrix{T}, γ::Union{Nothing,T}; dims::Integer,
 end
 
 
-function whiten_cov_chol!(Σ::AbstractMatrix{T}, γ::Union{Nothing,T}=zero(T); 
+function whiten_cov_chol!(Σ::AbstractMatrix{T}, γ::Union{Nothing,T}; 
                           dims::Integer=1) where T
     p, p₂ = check_dims(Σ, dims=dims)
 

@@ -32,7 +32,7 @@
     end
 end
 
-@testset "whiten_data!(X, γ; dims, df)" begin
+@testset "whiten_data_svd!(X, γ; dims, df)" begin
     n = 10
     p = 3
     for T in (Float32, Float64)

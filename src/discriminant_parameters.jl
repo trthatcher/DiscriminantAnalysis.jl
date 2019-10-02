@@ -9,15 +9,15 @@ mutable struct DiscriminantParameters{T}
     m::Int
     "Number of predictors"
     p::Int
-    "Matrix of class centroids (one per row or column - see `dims`)"
+    "Matrix of class centroids (one per row if `dims` is 1 or 1 per column if `dims` is 2)"
     M::Matrix{T}
     "Prior-weighted overall centroid"
     μ::Vector{T}
     "Vector of class prior probabilities"
     π::Vector{T}
-    "Vector of Class counts"
+    "Vector of class counts"
     nₘ::Vector{Int}
-    "Shrinkage parameter"
+    "Shrinkage parameter towards average eigenvalue of overall covariance matrix"
     γ::Union{Nothing,T}
     "Overall covariance matrix without `γ` regularization"
     Σ::Union{Nothing,Matrix{T}}
