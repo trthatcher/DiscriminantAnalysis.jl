@@ -89,7 +89,15 @@ function set_statistics!(Θ::DiscriminantParameters{T},
         Θ.nₘ = class_counts!(Vector{Int}(undef, m), y)
     end
 
-    validate_class_counts(Θ.nₘ)
+    n = 0
+    for (k, nₖ) in enumerate(Θ.nₘ)
+        n += nₖ
+        nₖ > 1 || error("class count at class index $(k) must be greater than 1")
+    end
+
+    n₂ = size(X, dims)
+    n == n₂ || error("class count total must observation count along dimension $(dims) " *
+                     "of X (got $(n) and $(n₂))")
 
     return Θ
 end

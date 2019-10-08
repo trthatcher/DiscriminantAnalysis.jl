@@ -1,6 +1,8 @@
 module DiscriminantAnalysis
     using StatsBase, LinearAlgebra
 
+    const LA = LinearAlgebra
+
     # Common functions across classifiers
     include("common.jl")
     include("whiten.jl")
@@ -13,9 +15,9 @@ module DiscriminantAnalysis
     """
     abstract type DiscriminantModel{T<:AbstractFloat} <: StatsBase.StatisticalModel end
 
-    include("discriminant_parameters.jl")
+    include("parameters.jl")
     for classifier in ["linear"] #, "quadratic"]
         include("classifiers/$(classifier).jl")
     end
-    include("discriminant_functions.jl")
+    include("discriminants.jl")
 end

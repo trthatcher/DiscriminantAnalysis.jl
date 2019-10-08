@@ -55,6 +55,6 @@ end
 @testset "DiscriminantAnalysis.jl" begin
     include("test_common.jl")
     include("test_whiten.jl")
-    include("test_discriminant_parameters.jl")
+    include("test_parameters.jl")
     include("test_classifiers_linear.jl")
 end

@@ -42,9 +42,6 @@ function whiten_data_chol!(X::Matrix{T}; dims::Integer, df::Integer=size(X,dims)
 end
 
 
-@inline regularize(x, y, γ) = (1-γ)*x + γ*y
-
-
 function whiten_data_svd!(X::Matrix{T}, γ::Union{Nothing,T}; dims::Integer, 
                           df::Integer=size(X,dims)-1) where T
     n, p = check_dims(X, dims=dims)

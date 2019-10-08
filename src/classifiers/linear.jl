@@ -26,13 +26,16 @@ function canonical_coordinates!(LDA::LinearDiscriminantModel{T}) where T
     elseif Θ.dims == 1
         # center M by overall centroid
         M = broadcast!(-, similar(Θ.M, T), Θ.M, transpose(Θ.μ))
+
         # Σ_between = Mᵀdiag(π)M so need to scale by sqrt π
         broadcast!((πₖ, Mₖⱼ) -> √(πₖ)Mₖⱼ, M, Θ.π, M)
         UDVᵀ = svd!(M*LDA.W, full=false)
+
         # Extract m-1 components 
         LDA.C = LDA.W*transpose(view(UDVᵀ.Vt, 1:m-1, :))
     else
         M = broadcast!(-, similar(Θ.M, T), Θ.M, Θ.μ)
+
         broadcast!((πₖ, Mⱼₖ) -> √(πₖ)Mⱼₖ, M, transpose(Θ.π), M)
         UDVᵀ = svd!(LDA.W*M, full=false)
 
@@ -83,15 +86,19 @@ function fit!(LDA::LinearDiscriminantModel{T},
     if dims == 1
         # Overall centroid is prior-weighted average of class centroids
         Θ.μ = vec(transpose(Θ.π)*Θ.M)
+
         # Center the data matrix with respect to classes to compute whitening matrix
         X .-= view(Θ.M, y, :)
+
         # Compute covariance matrix if requested
         if compute_covariance
             Θ.Σ = lmul!(one(T)/df, transpose(X)*X)
         end
     else
         Θ.μ = Θ.M*Θ.π
+
         X .-= view(Θ.M, :, y)
+        
         if compute_covariance
             Θ.Σ = lmul!(one(T)/df, X*transpose(X))
         end

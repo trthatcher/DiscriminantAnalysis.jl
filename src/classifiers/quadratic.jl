@@ -5,8 +5,10 @@ mutable struct QuadraticDiscriminantModel{T} <: DiscriminantModel{T}
     Θ::DiscriminantParameters{T}
     "Shrinkage parameter towards the common covariance matrix"
     λ::Union{Nothing,T}
+    "Covariance matrix for each class"
+    Σₘ::Union{Nothing,Vector{AbstractMatrix{T}}}
     "Whitening transformation by class"
-    Wₘ::AbstractArray{T,3}
+    Wₘ::Vector{AbstractMatrix{T}}
     "Discriminant function intercept for each class"
     δ₀::Vector{T}
     function QuadraticDiscriminantModel{T}() where T
@@ -15,6 +17,97 @@ mutable struct QuadraticDiscriminantModel{T} <: DiscriminantModel{T}
     end
 end
 
+function fit!(QDA::QuadraticDiscriminantModel{T},
+              y::Vector{<:Integer},
+              X::Matrix{T};
+              dims::Integer=1,
+              canonical::Bool=false,
+              store_cov::Bool=false,
+              store_class_covs::Bool=false,
+              centroids::Union{Nothing,AbstractMatrix}=nothing, 
+              priors::Union{Nothing,AbstractVector}=nothing,
+              gamma::Union{Nothing,Real}=nothing,
+              lambda::Union{Nothing,Real}=nothing) where T
+    Θ = QDA.Θ
+
+    if lambda !== nothing
+        0 ≤ lambda ≤ 1 || throw(DomainError(lambda, "λ must be in the interval [0,1]"))
+    end
+    QDA.λ = lambda
+    
+    set_dimensions!(Θ, y, X, dims)
+    set_gamma!(Θ, gamma)
+    set_statistics!(Θ, y, X, centroids)
+    set_priors!(Θ, priors)
+
+    # Compute overall degrees of freedom
+    df = size(X, dims) - Θ.m
+
+    if dims == 1
+        # Overall centroid is prior-weighted average of class centroids
+        Θ.μ = vec(transpose(Θ.π)*Θ.M)
+        # Center the data matrix with respect to classes to compute whitening matrix
+        X .-= view(Θ.M, y, :)
+        # Compute scatter matrix if requested
+        S = (store_cov || QDA.λ !== nothing) ? transpose(X)*X : nothing
+    else
+        Θ.μ = Θ.M*Θ.π
+        X .-= view(Θ.M, :, y)
+        S = (store_cov || QDA.λ !== nothing) ? X*transpose(X) : nothing
+    end
+
+    # Set up some references
+    Σₘ = QDA.Σₘ
+    Wₘ = QDA.Wₘ
+    δ₀ = QDA.δ₀
+
+    # Allocate space for each covariance matrix if required
+    QDA.Σₘ = store_class_covs ? [zeros(T, 0, 0) for k=1:QDA.m] : nothing
+
+    # QDA - find whitening matrix for each class
+    for (k, nₖ) in enumerate(Θ.nₘ)
+        Xₖ = dims == 1 ? X[y .== k, :] : X[:, y .== k]
+        dfₖ = nₖ - 1
+
+        if store_class_covs || QDA.λ !== nothing
+            Sₖ = dims == 1 ? transpose(Xₖ)*Xₖ : Xₖ*transpose(Xₖ)
+
+            if QDA.λ === nothing
+                # Compute covariance matrix using within-class degrees of freedom
+                Σₖ = lmul!(one(T)/dfₖ, Sₖ)
+                Σₘ[k] = deepcopy(Σₖ)
+
+                # Compute whitening
+                Wₘ[k], δ₀[k] = whiten_cov_chol!(Σₖ, Θ.γ, dims=dims)
+            else
+                if store_class_covs
+                    QDA.Σₘ[k] = lmul!(one(T)/dfₖ, deepcopy(Sₖ))
+                end
+
+                # Regularize covariance matrix
+                scale = one(T)/regularize(dfₖ, df, QDA.λ)  # denominator is separate
+                Σₖ = lmul!(scale, broadcast!(regularize, Sₖ, Sₖ, S, QDA.λ))
+
+                # Compute whitening 
+                Wₘ[k], δ₀[k] = whiten_cov_chol!(Σₖ, Θ.γ, dims=dims)
+            end
+        else
+            if Θ.γ === nothing
+                Wₘ[k], δ₀[k] = whiten_data_chol!(Xₖ, dims=dims, df=dfₖ)
+            else
+                Wₘ[k], δ₀[k] = whiten_data_svd!(Xₖ, Θ.γ, dims=dims, df=dfₖ)
+            end
+        end
+    end
+
+    if store_cov
+        Θ.Σ = lmul!(one(T)/df, S)
+    end
+
+    Θ.fit = true
+
+    return LDA
+end
 
 
 

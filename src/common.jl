@@ -32,14 +32,6 @@ function validate_priors(π::AbstractVector{T}) where T
     return length(π)
 end
 
-function validate_class_counts(nₘ::AbstractVector{T}) where {T <: Integer}
-    for (k, nₖ) in enumerate(nₘ)
-        nₖ > 1 || error("class count at class index $(k) must be greater than 1")
-    end
-
-    return length(nₘ)
-end
-
 
 ### Class Calculations
 
@@ -149,6 +141,9 @@ function regularize!(Σ₁::AbstractMatrix{T}, Σ₂::AbstractMatrix{T}, λ::T) 
     
     return Σ₁
 end
+
+
+@inline regularize(x, y, γ) = (1-γ)*x + γ*y
 
 
 """
