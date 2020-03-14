@@ -49,20 +49,21 @@ end
 """
     fit!(LDA::LinearDiscriminantModel, Y::Matrix, X::Matrix; dims::Integer=1, kwargs...)
 
-Fit a linear discriminant model based on data matrix `X` and class indicator matrix `Y` 
+Fit a linear discriminant model based on data matrix `X` and class indicator matrix `Y`
 along dimensions `dims` and overwrite `LDA`.
 
 # Keyword arguments
 - `canonical::Bool=false`: computes canonical coordinates and performs dimensionality
-reduction if `true`
+  reduction if `true`
 - `compute_covariance`: if true, computes `Σ`
-- `centroids::Matrix`: specifies the class centroids. If `dims` is `1`, then each row 
-represents a class centroid, otherwise each column represents a class centroid. If not 
-specified, the centroids are computed from the data.
-- `priors::Vector`: specifies the class membership prior probabilties. If not specified, 
-the class probabilities a computed based on the class counts
-- `gamma::Real=0`: regularization parameter γ ∈ [0,1] shrinks the within-class covariance 
-matrix towards the identity matrix scaled by the average eigenvalue of the covariance matrix
+- `centroids::Matrix`: specifies the class centroids. If `dims` is `1`, then each row
+   represents a class centroid, otherwise each column represents a class centroid. If not
+   specified, the centroids are computed from the data
+- `priors::Vector`: specifies the class membership prior probabilties. If not specified,
+  the class probabilities a computed based on the class counts
+- `gamma::Real=0`: regularization parameter γ ∈ [0,1] shrinks the within-class covariance
+  matrix towards the identity matrix scaled by the average eigenvalue of the covariance
+  matrix
 """
 function fit!(LDA::LinearDiscriminantModel{T},
               y::Vector{<:Integer},
