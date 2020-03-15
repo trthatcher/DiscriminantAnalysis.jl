@@ -9,7 +9,7 @@
         @test_throws ArgumentError DA.check_dims(zeros(T, p, p), dims=0)
         @test_throws ArgumentError DA.check_dims(zeros(T, p, p), dims=3)
 
-        @test (n, p+1) == DA.check_dims(zeros(T, n, p), dims=1)
+        @test (n, p) == DA.check_dims(zeros(T, n, p), dims=1)
         @test (n, p) == DA.check_dims(zeros(T, p, n), dims=2)
         @test (n, p) == DA.check_dims(transpose(zeros(T, n, p)), dims=2)
     end

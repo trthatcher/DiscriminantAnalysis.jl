@@ -109,7 +109,7 @@ function fit!(QDA::QuadraticDiscriminantModel{T},
     return LDA
 end
 
-
+# discriminants
 
 #==========================================================================
   Regularized Quadratic Discriminant Analysis Solver

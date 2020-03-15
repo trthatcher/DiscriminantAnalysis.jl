@@ -65,9 +65,9 @@ along dimensions `dims` and overwrite `LDA`.
   matrix towards the identity matrix scaled by the average eigenvalue of the covariance
   matrix
 """
-function fit!(LDA::LinearDiscriminantModel{T},
+function _fit!(LDA::LinearDiscriminantModel{T},
               y::Vector{<:Integer},
-              X::Matrix{T};
+              X::Matrix{T},
               dims::Integer=1,
               canonical::Bool=false,
               compute_covariance::Bool=false,

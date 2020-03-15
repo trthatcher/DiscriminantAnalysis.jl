@@ -1,6 +1,6 @@
 @info "Testing linear.jl"
 
-@testset "canonical_coordinates!(LDA)" begin
+@testset "canonical_coordinates!" begin
     p = 10
     m = 5
 
@@ -63,7 +63,7 @@
     end
 end
 
-@testset "fit!(LDA)" begin
+@testset "_fit!" begin
     nₘ = [400; 500; 600]
     p = 10
     n = sum(nₘ)
@@ -99,9 +99,8 @@ end
                 end
                 
                 for π_test in π_tests, compute_cov in tf_tests, canonical in tf_tests
-                    lda_test = DA.fit!(LDM(), y, copy(Xt_test), dims=1, canonical=canonical, 
-                                       compute_covariance=compute_cov, centroids=Mt_input, 
-                                       priors=π_test, gamma=γ)
+                    lda_test = DA._fit!(LDM(), y, copy(Xt_test), 1, canonical, compute_cov,
+                                        Mt_input, π_test, γ)
         
                     @test lda_test.Θ.fit == true
                     @test lda_test.Θ.dims == 1
@@ -119,9 +118,8 @@ end
                         @test lda_test.C === nothing
                     end
 
-                    lda_test = DA.fit!(LDM(), y, copy(X_test), dims=2, canonical=canonical, 
-                                       compute_covariance=compute_cov, centroids=M_input, 
-                                       priors=π_test, gamma=γ)
+                    lda_test = DA._fit!(LDM(), y, copy(X_test), 2, canonical, compute_cov,
+                                        M_input, π_test, γ)
         
                     @test lda_test.Θ.fit == true
                     @test lda_test.Θ.dims == 2
@@ -144,7 +142,7 @@ end
     end
 end
 
-@testset "discriminants!(Δ, LDA, X)" begin
+@testset "discriminants!" begin
     n = 500
 
     for T in (Float32, Float64)
@@ -166,12 +164,14 @@ end
             Δ[k, :] = log(convert(T, 0.5)) .- sum(abs2.(X .- M[:, k:k]), dims=1)/2
         end
 
-        lda_test = DA.fit!(DA.LinearDiscriminantModel{T}(), y, copy(X), dims=2, canonical=false)
+        LDM = DA.LinearDiscriminantModel{T}
+
+        lda_test = DA._fit!(LDM(), y, copy(X), 2, false)
         Δ_test = DA.discriminants!(zeros(T, 2, 2n), lda_test, X)
 
         @test isapprox(Δ_test, Δ)
 
-        lda_test = DA.fit!(DA.LinearDiscriminantModel{T}(), y, copy(transpose(X)), dims=1, canonical=false)
+        lda_test = DA._fit!(LDM(), y, copy(transpose(X)), 1, false)
         Δ_test = DA.discriminants!(zeros(T, 2n, 2), lda_test, copy(transpose(X)))
     end
 end
