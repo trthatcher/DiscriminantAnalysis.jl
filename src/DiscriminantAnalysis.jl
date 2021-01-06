@@ -1,24 +1,23 @@
 module DiscriminantAnalysis
+    using StatsBase, LinearAlgebra
 
-    import Base: 
-        LinAlg.BlasReal, 
-        show,
-        AbstractArray,
-        size,
-        linearindexing,
-        getindex, 
-        length, 
-        convert
+    const LA = LinearAlgebra
 
-    export
-        lda,
-        cda,
-        qda,
-        discriminants,
-        classify
-
+    # Common functions across classifiers
     include("common.jl")
-    include("lda.jl")
-    include("qda.jl")
+    include("whiten.jl")
 
-end # module
+    # Classifier-specific code
+    """
+        DiscriminantModel
+
+    Abstract type representing a discriminant model
+    """
+    abstract type DiscriminantModel{T<:AbstractFloat} <: StatsBase.StatisticalModel end
+
+    include("parameters.jl")
+    for classifier in ["linear"] #, "quadratic"]
+        include("classifiers/$(classifier).jl")
+    end
+    include("discriminants.jl")
+end

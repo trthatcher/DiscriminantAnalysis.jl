@@ -1,22 +1,60 @@
-using DiscriminantAnalysis
-using Base.Test
+using Test, LinearAlgebra, Statistics, DiscriminantAnalysis
 
-MOD = DiscriminantAnalysis
+const DA = DiscriminantAnalysis
 
-FloatingPointTypes = (Float32, Float64)
-IntegerTypes = (Int32, Int64)
-
-function sampledata{U<:Integer}(n_k::Vector{U}, p::Integer)
-    p >= 3 || error("need at least 3 dimensions")
-    all(n_k .> p) || error("Need p+1 obs per group")
-    k = length(n_k)
-    Z = vcat([vcat(vcat(eye(Float64,p), Float64[ones(p-1); 0]')/2, 
-                   rand(Float64, n_k[i]-(p+1), p)) .+ i for i = 1:k]...)
-    refs = vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...)
-    σ = sortperm(rand(sum(n_k)))
-    (MOD.RefVector(refs[σ]), Z[σ,:])
+function random_centroids(T::Type{<:AbstractFloat}, m::Int, p::Int)
+    M = zeros(T, p, m)
+    for k = 1:m
+        M[:, k] = T[rand() < 0.5 ? -2k : 2k for i = 1:p]
+    end
+    return M
 end
 
-include("test_common.jl")
-include("test_lda.jl")
-include("test_qda.jl")
+function random_data(T::Type{<:AbstractFloat}, nₘ::Vector{Int}, p::Int)
+    n = sum(nₘ)
+    m = length(nₘ)
+
+    X = zeros(T, p, n)
+    M = zeros(T, p, m)
+
+    ix = sortperm(rand(n))
+
+    y = [k for (k, nₖ) in enumerate(nₘ) for i = 1:nₖ][ix]
+    M = random_centroids(T, m, p)
+
+    for (k, nₖ) in enumerate(nₘ)
+        Xₖ = randn(T, p, nₖ)
+
+        Xₖ .-= mean(Xₖ, dims=2)
+        Xₖ .+= view(M, :, k)
+
+        X[:, y .== k] = Xₖ
+    end
+
+    return (X, y, M)
+end
+
+function random_cov(T::Type{<:AbstractFloat}, p::Integer)
+    Q = qr(randn(T, p, p)).Q
+    D = Diagonal(2p*rand(T, p))
+
+    Σ = Symmetric(transpose(Q)*D*Q)
+
+    W_svd = inv(√(D))*Q
+    W_chol = copy(transpose(inv(cholesky(Σ).U)))
+
+    return (Σ, W_svd, W_chol)
+end
+
+function perturb(M::Matrix{T}, tol::Real=convert(T,0.05)) where {T <: Real}
+    ϵ = convert(T, tol)
+    jitter = range(one(T)-ϵ, stop=one(T)+ϵ, length=10000)
+    return broadcast(x -> x*rand(jitter), M)
+end
+
+@testset "DiscriminantAnalysis.jl" begin
+    include("test_common.jl")
+    include("test_whiten.jl")
+    include("test_parameters.jl")
+    include("test_classifiers_linear.jl")
+end

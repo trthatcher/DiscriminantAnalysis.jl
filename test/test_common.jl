@@ -1,179 +1,157 @@
-info("Testing ", MOD.RefVector)
-for T in IntegerTypes
-    ref = T[1; 1; 2; 3; 3]
-    k = convert(T, 3)
-    y = MOD.RefVector(ref,k)
+@info "Testing common.jl"
 
-    @test all(y.ref .== ref)
-    @test y.k == k
+# Dimensionality Checks
 
-    @test_throws ErrorException MOD.RefVector(ref[ref .!= 2], k)
-    @test_throws ErrorException MOD.RefVector(ref[ref .!= 2], k + one(T))
-    @test_throws ErrorException MOD.RefVector(ref[ref .!= 2], k - one(T))
-end
+@testset "check_dims(X; dims)" begin
+    n = 20
+    p = 5
+    for T in (Float32, Float64)
+        @test_throws ArgumentError DA.check_dims(zeros(T, p, p), dims=0)
+        @test_throws ArgumentError DA.check_dims(zeros(T, p, p), dims=3)
 
-# Class Functions
-
-n_k = [80; 100; 120]
-k = length(n_k)
-n = sum(n_k)
-p = 3
-
-y, X = sampledata(n_k, p)
-Z = vcat([sum(X[y.ref .== i,:],1) for i = 1:k]...)
-M = Z ./ n_k
-H = X .- M[y, :]
-Σ = H'H/(n-1)
-
-#=
-y = MOD.RefVector(vcat([Int64[i for j = 1:n_k[i]] for i = 1:k]...), k)
-X = vcat([rand(n_k[i], p) .+ (10rand(1,p) .- 5) for i = 1:k]...)
-σ = sortperm(rand(sum(n_k)))
-y = MOD.RefVector(y[σ])
-X = X[σ,:]
-=#
-
-info("Testing ", MOD.classcounts)
-for U in IntegerTypes
-    @test all(n_k .== MOD.classcounts(convert(MOD.RefVector{U}, y)))
-end
-
-info("Testing ", MOD.classtotals)
-for T in FloatingPointTypes
-    for U in IntegerTypes
-        X_tmp = convert(Array{T}, X)
-        y_tmp = convert(MOD.RefVector{U}, y)
-        Z_tmp = convert(Array{T}, Z)
-        @test_approx_eq MOD.classtotals(Val{:row}, X_tmp, y_tmp)  Z_tmp
-        @test_approx_eq MOD.classtotals(Val{:col}, X_tmp', y_tmp) Z_tmp'
-        @test_throws DimensionMismatch MOD.classtotals(Val{:row}, X_tmp', y_tmp)
-        @test_throws DimensionMismatch MOD.classtotals(Val{:col}, X_tmp, y_tmp)
-    end
-end
-
-info("Testing ", MOD.classmeans)
-for T in FloatingPointTypes
-    for U in IntegerTypes
-        X_tmp = convert(Array{T}, X)
-        y_tmp = convert(MOD.RefVector{U}, y)
-        M_tmp = convert(Array{T}, M)
-        @test_approx_eq MOD.classmeans(Val{:row}, X_tmp,  y_tmp) M
-        @test_approx_eq MOD.classmeans(Val{:col}, X_tmp', y_tmp) M'
-    end
-end
-
-info("Testing ", MOD.centerclasses!)
-for T in FloatingPointTypes
-    for U in IntegerTypes
-        X_tmp = copy(convert(Array{T}, X))
-        y_tmp = convert(MOD.RefVector{U}, y)
-        M_tmp = convert(Array{T}, M)
-        H_tmp = convert(Array{T}, H)
-        @test_approx_eq MOD.centerclasses!(Val{:row}, copy(X_tmp), M_tmp, y_tmp) H
-        @test_approx_eq MOD.centerclasses!(Val{:col}, copy(X_tmp)', M_tmp', y_tmp) H'
-
-        @test_throws DimensionMismatch MOD.centerclasses!(Val{:row}, X_tmp, Array(T,k,p+1), y_tmp)
-        @test_throws DimensionMismatch MOD.centerclasses!(Val{:col}, X_tmp', Array(T,p+1,k), y_tmp)
-
-        @test_throws DimensionMismatch MOD.centerclasses!(Val{:row}, X_tmp, Array(T,k+1,p), y_tmp)
-        @test_throws DimensionMismatch MOD.centerclasses!(Val{:col}, X_tmp', Array(T,p,k+1), y_tmp)
+        @test (n, p) == DA.check_dims(zeros(T, n, p), dims=1)
+        @test (n, p) == DA.check_dims(zeros(T, p, n), dims=2)
+        @test (n, p) == DA.check_dims(transpose(zeros(T, n, p)), dims=2)
     end
 end
 
 
-info("Testing ", MOD.regularize!)
-for T in FloatingPointTypes
-    S1 = T[1 2 3;
-           4 5 6;
-           7 8 9]
+# Data Validation
 
-    n = size(S1,1)
+@testset "validate_priors(π)" begin
+    k = 10
+    for T in (Float32, Float64)
+        # Check probability domain
+        @test_throws DomainError DA.validate_priors(T[0.5; 0.5; 0.0])
+        @test_throws DomainError DA.validate_priors(T[1.0; 0.0; 0.0])
 
-    S2 = T[7 8 9;
-           8 3 6;
-           1 7 4]
+        # Check totals
+        @test_throws ArgumentError DA.validate_priors(T[0.3; 0.3; 0.3])
+        @test_throws ArgumentError DA.validate_priors(T[0.4; 0.4; 0.4])
 
-    B = T[1 2;
-          3 4;
-          5 6]
+        # Test valid π
+        π = rand(T, k)
+        π ./= sum(π)
+        #broadcast!(/, π, π, sum(π))
 
-    b = T[1;
-          3]
-
-    @test_approx_eq MOD.regularize!(copy(S1), zero(T),  S2) S1
-    @test_approx_eq MOD.regularize!(copy(S1), one(T),   S2) S2
-    @test_approx_eq MOD.regularize!(copy(S1), one(T)/2, S2) (1-one(T)/2)*S1 + (one(T)/2)*S2
-    @test_throws ErrorException MOD.regularize!(copy(S1), -one(T),  S2)
-    @test_throws ErrorException MOD.regularize!(copy(S1), 2*one(T), S2)
-    @test_throws DimensionMismatch MOD.regularize!(S1, one(T), B)
-
-    @test_approx_eq MOD.regularize!(copy(S1), zero(T)) S1
-    @test_approx_eq MOD.regularize!(copy(S1), one(T)) (trace(S1)/n)*eye(n)
-    @test_approx_eq MOD.regularize!(copy(S1), one(T)/2) (1-one(T)/2)*S1 + (one(T)/2)*(trace(S1)/n)*eye(n)
-end
-
-info("Testing ", MOD.dotvectors)
-for T in FloatingPointTypes
-    X_tmp = convert(Array{T}, X)
-
-    @test_approx_eq MOD.dotvectors(Val{:row}, X_tmp)  sum(X_tmp .* X_tmp,2)
-    @test_approx_eq MOD.dotvectors(Val{:col}, X_tmp') sum(X_tmp .* X_tmp,2)
-
-    @test_throws DimensionMismatch MOD.dotvectors!(Val{:row}, X_tmp,  Array(T, n+1))
-    @test_throws DimensionMismatch MOD.dotvectors!(Val{:col}, X_tmp', Array(T, n+1))
-end
-
-info("Testing ", MOD.whitendata_svd!)
-for T in FloatingPointTypes
-    H_tmp = copy(convert(Array{T}, H))
-    Σ_tmp = copy(convert(Array{T}, Σ))
-
-    # Test full rank case
-    for λ in (zero(T), convert(T, 0.25), convert(T, 0.5), convert(T, 0.75), one(T))
-        W_tmp = MOD.whitendata_svd!(copy(H_tmp), λ)
-        S_tmp = (1-λ)*Σ_tmp + (λ*trace(Σ_tmp)/p)*I
-        @test_approx_eq eye(T,3) W_tmp*S_tmp*(W_tmp')
+        @test k == DA.validate_priors(π)
     end
-
-    # Test degenerate case
-    H_tmp = eye(T,3) .- mean(eye(T,3))
-    @test_throws ErrorException MOD.whitendata_svd!(copy(H_tmp), zero(T))
 end
 
-info("Testing ", MOD.whitendata_qr!)
-for T in FloatingPointTypes
-    H_tmp = copy(convert(Array{T}, H))
-    Σ_tmp = copy(convert(Array{T}, Σ))
+# Class operations
 
-    # Test full rank case
-    W_tmp = MOD.whitendata_qr!(copy(H_tmp))
-    @test_approx_eq eye(T,3) (W_tmp')*Σ_tmp*W_tmp
+@testset "class_counts(nₘ, y)" begin
+    m = 3
+    nₖ = 300
 
-    # Test degenerate case
-    H_tmp = eye(T,3)
-    @test_throws ErrorException MOD.whitendata_qr!(copy(H_tmp))
+    y = repeat(vec(1:m), outer=nₖ)
 
-    H_tmp = ones(T,4,3)
-    @test_throws ErrorException MOD.whitendata_qr!(copy(H_tmp))
+    # Test bounds
+    y_tst = copy(y)
+
+    y_tst[1] = 0
+    @test_throws BoundsError DA.class_counts!(Vector{Int}(undef, m), y_tst)
+
+    y_tst[1] = m + 1
+    @test_throws BoundsError DA.class_counts!(Vector{Int}(undef, m), y_tst)
+
+    # Test computation
+    @test DA.class_counts!(Vector{Int}(undef, m), y) == [nₖ for i = 1:m]
 end
 
-info("Testing ", MOD.whitencov_chol!)
-for T in FloatingPointTypes
-    H_tmp = copy(convert(Array{T}, H))
-    Σ_tmp = copy(convert(Array{T}, Σ))
+@testset "_class_statistics!(M, nₘ, X, y)" begin
+    nₘ = [45, 55, 100]
+    m = length(nₘ)
+    n = sum(nₘ)
+    p = 5
 
-    # Test unregularized, full rank case
-    W_tmp = MOD.whitencov_chol!(copy(Σ_tmp), Nullable{T}())
-    @test_approx_eq eye(T,3) (W_tmp')*Σ_tmp*W_tmp
+    for T in (Float32, Float64)
+        X, y, M = random_data(T, nₘ, p)
+        Xtt = transpose(copy(transpose(X)))
+        Mtt = transpose(copy(transpose(M)))
 
-    # Test regularized cases
-    for λ in (zero(T), convert(T, 0.25), convert(T, 0.5), convert(T, 0.75), one(T))
-        W_tmp = MOD.whitencov_chol!(copy(Σ_tmp), Nullable(λ))
-        S_tmp = (1-λ)*Σ_tmp + (λ*trace(Σ_tmp)/p)*I
-        @test_approx_eq eye(T,3) (W_tmp')*S_tmp*W_tmp
+        for X_test in (X, Xtt)
+            nₘ_test = copy(nₘ)
+            # test predictor dimensionality
+            @test_throws DimensionMismatch DA._class_statistics!(zeros(T,2,p+1), nₘ_test, X_test,  y)
+            @test_throws DimensionMismatch DA._class_statistics!(zeros(T,2,p-1), nₘ_test, X_test,  y)
+
+            # test observation dimensionality
+            @test_throws DimensionMismatch DA._class_statistics!(similar(M), nₘ_test, X_test, zeros(Int,n+1))
+            @test_throws DimensionMismatch DA._class_statistics!(similar(M), nₘ_test, X_test, zeros(Int,n-1))
+
+            # test count dimensionality
+            @test_throws DimensionMismatch DA._class_statistics!(similar(M), zeros(Int,m+1), X_test, y)
+            @test_throws DimensionMismatch DA._class_statistics!(similar(M), zeros(Int,m-1), X_test, y)
+
+            # test indexing of class_statistics
+            y_test = copy(y)
+            y_test[1] = 0
+            @test_throws BoundsError DA._class_statistics!(similar(M), nₘ_test, X_test, y_test)
+
+            y_test[1] = m+1
+            @test_throws BoundsError DA._class_statistics!(similar(M), nₘ_test, X_test, y_test)
+        end
+
+        # test mean computation
+        for (M_test, X_test) in ((copy(M), X), (deepcopy(Mtt), Xtt))
+            nₘ_test = zeros(Int, m)
+
+            M_res, nₘ_res = DA._class_statistics!(M_test, nₘ_test, X, y)
+            
+            @test nₘ_res === nₘ_test
+            @test nₘ_res == nₘ
+
+            @test M_res === M_test
+            @test isapprox(M, M_test)
+        end
     end
+end
 
-    # Test degenerate case
-    @test_throws ErrorException MOD.whitencov_chol!(diagm([one(T); zero(T)]), Nullable{T}())
-    @test_throws ErrorException MOD.whitencov_chol!(diagm([one(T); zero(T)]), Nullable(zero(T)))
+### Regularization
+
+@testset "regularize!(Σ₁, Σ₂, λ)" begin
+    for T in (Float32, Float64)
+        S = zeros(T, 3, 3)
+        @test_throws DimensionMismatch DA.regularize!(zeros(T, 2, 3), S, T(0))
+        @test_throws DimensionMismatch DA.regularize!(S, zeros(T, 2, 3), T(0))
+        @test_throws DimensionMismatch DA.regularize!(S, zeros(T, 2, 2), T(0))
+        
+        @test_throws DomainError DA.regularize!(S, S, T(0) - eps(T(0)))
+        @test_throws DomainError DA.regularize!(S, S, T(1) + eps(T(1)))
+        
+        S1 = cov(rand(T, 10, 3))
+        S2 = cov(rand(T, 10, 3))
+        for λ in (T(0), T(0.25), T(0.5), T(0.75), T(1))
+            S1_test = copy(S1)
+            S2_test = copy(S2)
+
+            DA.regularize!(S1_test, S2_test, λ)
+
+            @test isapprox(S1_test, (1-λ)S1 + λ*S2)
+            @test S2_test == S2
+        end
+    end
+end
+
+@testset "regularize!(Σ, γ)" begin
+    n = 10
+    p = 3
+    for T in (Float32, Float64)
+        @test_throws DimensionMismatch DA.regularize!(zeros(T, 2, 3), T(0))
+        @test_throws DimensionMismatch DA.regularize!(zeros(T, 3, 2), T(0))
+        
+        S = zeros(T, p, p)
+        @test_throws DomainError DA.regularize!(S, T(0) - eps(T(0)))
+        @test_throws DomainError DA.regularize!(S, T(1) + eps(T(1)))
+
+        S = cov(rand(T, n, p))
+        for γ in (T(0), T(0.25), T(0.5), T(0.75), T(1))
+            S_test = copy(S)
+
+            DA.regularize!(S_test, γ)
+
+            @test isapprox(S_test, (1-γ)S + γ*(tr(S)/p)I)
+        end
+    end
 end
