@@ -22,7 +22,7 @@ function posteriors!(Π::Matrix{T}, LDA::LinearDiscriminantModel{T}, X::Matrix{T
 end
 
 
-function posteriors!(LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
+function posteriors(LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
     Δ = discriminants(LDA, X)
     return _posteriors!(Δ, LDA)
 end
