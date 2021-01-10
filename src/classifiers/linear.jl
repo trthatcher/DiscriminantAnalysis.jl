@@ -47,7 +47,7 @@ end
 
 
 """
-    fit!(LDA::LinearDiscriminantModel, Y::Matrix, X::Matrix; dims::Integer=1, kwargs...)
+    fit!(LDA::LinearDiscriminantModel, Y::Vector, X::Matrix; dims::Integer=1, kwargs...)
 
 Fit a linear discriminant model based on data matrix `X` and class indicator matrix `Y`
 along dimensions `dims` and overwrite `LDA`.
@@ -66,14 +66,14 @@ along dimensions `dims` and overwrite `LDA`.
   matrix
 """
 function _fit!(LDA::LinearDiscriminantModel{T},
-              y::Vector{<:Integer},
-              X::Matrix{T},
-              dims::Integer=1,
-              canonical::Bool=false,
-              compute_covariance::Bool=false,
-              centroids::Union{Nothing,AbstractMatrix}=nothing, 
-              priors::Union{Nothing,AbstractVector}=nothing,
-              gamma::Union{Nothing,Real}=nothing) where T
+               y::Vector{<:Integer},
+               X::Matrix{T},
+               dims::Integer=1,
+               canonical::Bool=false,
+               compute_covariance::Bool=false,
+               centroids::Union{Nothing,AbstractMatrix}=nothing, 
+               priors::Union{Nothing,AbstractVector}=nothing,
+               gamma::Union{Nothing,Real}=nothing) where T
     Θ = LDA.Θ
     
     set_dimensions!(Θ, y, X, dims)
@@ -124,6 +124,29 @@ function _fit!(LDA::LinearDiscriminantModel{T},
     Θ.fit = true
 
     return LDA
+end
+
+
+function lda(X::Matrix{T},
+             y::Vector{<:Integer};
+             dims::Integer=1,
+             canonical::Bool=false,
+             compute_covariance::Bool=false,
+             centroids::Union{Nothing,AbstractMatrix}=nothing, 
+             priors::Union{Nothing,AbstractVector}=nothing,
+             gamma::Union{Nothing,Real}=nothing) where T
+    U = T == Float32 || T == Float64 ? T : Float64
+    return _fit!(
+        LinearDiscriminantModel{U}(),
+        y,
+        U == T ? copy(X) : convert(Matrix{U}, X),
+        dims,
+        canonical,
+        compute_covariance,
+        centroids,
+        priors,
+        gamma
+    )
 end
 
 

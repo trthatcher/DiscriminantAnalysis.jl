@@ -2,9 +2,7 @@ function discriminants(LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
     dims = LDA.Θ.dims
     n = size(X, dims)
     m = LDA.Θ.m
-
     Δ = dims == 1 ? Matrix{T}(undef, n, m) : Matrix{T}(undef, m, n)
-
     return discriminants!(Δ, LDA, X)
 end
 
@@ -25,4 +23,11 @@ end
 function posteriors(LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
     Δ = discriminants(LDA, X)
     return _posteriors!(Δ, LDA)
+end
+
+
+function classify(LDA::LinearDiscriminantModel{T}, X::Matrix{T}) where T
+    Π = posteriors(LDA, X)
+    alt_dims = LDA.Θ.dims == 1 ? 2 : 1
+    return [y[alt_dims] for y in argmax(Π, dims=alt_dims)]
 end
